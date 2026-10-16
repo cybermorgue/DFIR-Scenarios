@@ -145,6 +145,11 @@ def system_noise(sim, t):
         parent = procs.get("svc_netsvcs", svc) if "compattel" in img.lower() or "taskhostw" in img.lower() \
             else (procs.get("svc_dcom", svc) if "wmiprvse" in img.lower() else svc)
         sim.spawn(t + sec(dt + sim.rng.uniform(0, 600)), img, cmd, parent, "system", life=life)
+        if "sppsvc" in img.lower():
+            ts = t + sec(dt + 40.0)
+            sim.sys(ts, "Microsoft-Windows-Security-SPP", 16384,
+                    [("param1", S.STR, "2027-01-12T03:47:19.4370000Z"), ("param2", S.STR, "RulesEngine")],
+                    ch="Application", esn="Microsoft-Windows-Security-SPP", qual=16384, kw=0x80000000000000)
 
 
 def internet_noise(sim, day_t):
@@ -446,3 +451,15 @@ def _poll(sim, t, p, task=False):
     sim.net(t, p, BUCKET_IP, 443, bytes_out=sim.rng.randint(520, 760),
             bytes_in=sim.rng.randint(1100, 1500) if task else sim.rng.randint(380, 600),
             dur=sim.rng.uniform(0.35, 0.9), dst_host=BUCKET_HOST)
+
+
+def triage_session(sim):
+    """19/10: IT entra por RDP y lanza KAPE desde un disco externo (E:) a las 11:20 UTC."""
+    lid, exp = logon_rdp(sim, TRIAGE_T - sec(480.0))
+    cmd = sim.spawn(TRIAGE_T - sec(60.0), CMD, f'"{CMD}"', exp, "jtorres", integrity="High")
+    sim.console(TRIAGE_T - sec(60.0), cmd)
+    k = sim.spawn(TRIAGE_T - sec(2.0), r"E:\KAPE\kape.exe",
+                  r"kape.exe --tsource C: --tdest E:\triage\INT01 --target EventLogs,RegistryHives,Amcache,Prefetch,MirthConnect",
+                  cmd, "jtorres", integrity="High", cwd="E:\\KAPE\\")
+    sim.console(TRIAGE_T - sec(2.0), k)
+    return lid

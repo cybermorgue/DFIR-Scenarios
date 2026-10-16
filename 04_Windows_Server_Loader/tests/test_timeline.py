@@ -59,3 +59,9 @@ def test_logs_cubren_la_ventana(sim):
 def test_userinit_cuelga_de_winlogon(sim):
     ui = [f(e) for e in sim.ev["Sysmon"] if e.eid == 1 and f(e)["Image"].endswith("userinit.exe")]
     assert ui and all(x["ParentImage"].endswith("winlogon.exe") for x in ui)
+
+
+def test_application_tiene_actividad(sim):
+    app = [e for e in sim.ev["Application"]]
+    assert len(app) > 40
+    assert {e.provider for e in app} >= {"Microsoft-Windows-Security-SPP"}

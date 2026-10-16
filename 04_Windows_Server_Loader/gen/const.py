@@ -118,6 +118,7 @@ _img(CVTRES, "Microsoft® Resource File To COFF Object Conversion Utility", "CVT
 _img(r"C:\Windows\System32\mscoree.dll", ".NET Runtime Execution Engine", "mscoree.dll", ver="10.0.17763.6054 (WinBuild.160101.0800)")
 _img(r"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\clr.dll", "Microsoft .NET Runtime Common Language Runtime - WorkStation",
      "clr.dll", "Microsoft® .NET Framework", ver="4.8.3761.0 built by: NET48REL1")
+_img(r"E:\KAPE\kape.exe", "KAPE", "kape.exe", "Kroll Artifact Parser and Extractor", "Kroll", "1.3.0.2")
 _img(r"C:\Windows\Sysmon64.exe", "System activity monitor", "Sysmon.exe", "Sysinternals Sysmon",
      "Sysinternals - www.sysinternals.com", "15.15")
 _DEF = r"C:\ProgramData\Microsoft\Windows Defender\Platform\4.18.25090.3009-0"
