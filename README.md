@@ -10,12 +10,13 @@ Escenarios sintéticos de DFIR para practicar análisis forense y correlación d
 | `Solucion.md` | Respuestas razonadas, con los filtros y comandos que las demuestran. |
 | `captura/*.pcap` | La captura de red del sensor, si el caso la incluye. |
 | `logs/` o `triage/` | Logs de los sistemas afectados o un triage del host empaquetado, de la misma línea temporal que la captura. |
-| `generar_escenario.py` | Script que regenera las evidencias desde cero (necesita `scapy`). |
+| `correo/*.eml` | Los correos implicados, si el caso empieza por uno. |
+| `generar_escenario.py` | Script que regenera las evidencias desde cero (los de captura de red necesitan `scapy`). |
 
 ## Reglas del material
 
 - **Todo es inventado.** Dominios, empresas, personas, credenciales y datos son ficticios. Los dominios se han elegido para que parezcan reales pero no existen.
-- **IPs de documentación.** Lo externo usa los rangos RFC 5737 (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`); lo interno, `10.20.30.0/24`. Nada apunta a infraestructura real.
+- **IPs de documentación.** Lo externo usa los rangos RFC 5737 (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`) y, en IPv6, `2001:db8::/32`; lo interno, `10.20.30.0/24`. Nada apunta a infraestructura real.
 - **Las evidencias se corroboran.** Se generan desde la misma línea temporal, así que cada petición del PCAP tiene su línea en los logs y viceversa. Pivotar entre fuentes es parte del ejercicio.
 - **Reproducible.** Cada escenario lleva su generador con semilla fija, de modo que las evidencias se pueden regenerar y auditar.
 
@@ -25,6 +26,7 @@ Escenarios sintéticos de DFIR para practicar análisis forense y correlación d
 | --- | --- | --- | --- | --- |
 | 01 | [01_Web_Exploitation](01_Web_Exploitation/Escenario.md) | Fácil | Intrusión a un portal web de pacientes | Enumeración de directorios, XSS reflejado, LFI, SQLi (error-based, boolean, UNION), uso de credenciales robadas, robo de datos vía panel |
 | 02 | [02_Linux_SSH_Compromise](02_Linux_SSH_Compromise/Escenario.md) | Media | Acceso por SSH al servidor de base de datos | Reutilización de credenciales, escalada por sudo y vim, cuenta y clave SSH de persistencia, cron de mando, volcado y exfiltración por HTTP, borrado de historial |
+| 03 | [03_Windows_Phishing](03_Windows_Phishing/Escenario.md) | Fácil | Spear phishing contra facturación (Windows 11) *(en curso: falta la solución)* | Dominio parecido al de un proveedor, ZIP con `.pdf.lnk`, PowerShell codificado, implante que imita a OneDrive, clave Run, descubrimiento del dominio, `tar` y `curl` para robar remesas |
 
 ## Cómo trabajarlos
 
