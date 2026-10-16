@@ -1,0 +1,54 @@
+{
+  "OneDrive.exe": {
+    "imphash": "f34d5f2d4577ed6d9ceec516c1f5a744",
+    "md5": "215336e9270941186ac2bca89425e49b",
+    "sha1": "9a199096b7ed2f23166296e2fde5f8dcdf8dee51",
+    "sha256": "ad07d54b62359749b7a32c265e19e5f36cd4962cf957ea6c0fb07ceddb702230",
+    "size": 9728,
+    "timestamp": 0
+  },
+  "client64.exe": {
+    "imphash": "ec67d1984e18f70d6dc08fc76cfdd87b",
+    "md5": "1e801255fe8d2ac238f59e89cf440b81",
+    "sha1": "26be6c96183437760ca0c49042338a1984ffb18c",
+    "sha256": "1b6ffac83b04b5772b0b733020f2d66b2b2b9f1a462b4bb179342282a2dbca0f",
+    "size": 4741632,
+    "timestamp": 0
+  },
+  "client64_embedded.dll": {
+    "imphash": "d3ed9edacb52e74d3facf55523d96fcd",
+    "md5": "bf2f84fa4d0244e056fd18c719ddfccb",
+    "sha1": "f7448bfbc8c60e28fa5f77b3eca9d378e4653894",
+    "sha256": "23ba8ede69a54a343e6ec559b507d383e3c8941905e1f56b27864a54c5a59578",
+    "size": 8173568,
+    "timestamp": 0
+  },
+  "run.ps1": {
+    "md5": "5866e42b2dfba75dcd2d288844f8b5da",
+    "sha1": "eba0dce7b6dffbe747a8a66fc4902dba65521372",
+    "sha256": "d5322f15c1a7c258e1eeedabc0d7921b7b78f38223db44c3b37c73322c0d6139",
+    "size": 2915
+  },
+  "run2.ps1": {
+    "md5": "790b50b31042805f59b81812c24cacae",
+    "sha1": "dda4761ca8ba0e635b7ac7927a372a21703c12b9",
+    "sha256": "7f6ce972759a0a7b59f7b03936ab56d36ce8d49c33e03f011e09c2410c63cd78",
+    "size": 3227
+  },
+  "winpty-agent.exe": {
+    "imphash": "e5f3781bed5543d5734c282418d2e966",
+    "md5": "d982861fcb09b0d1f898cb91c2398408",
+    "sha1": "a46e23f6e27d6418bd5f3ec438319ddf675be449",
+    "sha256": "9add1a61155ec47cf6f347faf776b746eebbde1dc9360d81b8a909da34650642",
+    "size": 727552,
+    "timestamp": 1495003847
+  },
+  "winpty.dll": {
+    "imphash": "cd0fa8c73b9de326986b342621017e24",
+    "md5": "1cd271fbb5b1da3e6569aba939c99b10",
+    "sha1": "40863bf78e386da10020e519aeff65af70fb335a",
+    "sha256": "936f611c2129600d35ab7aad45546a837f4f3a9ca7f673e5d66b48c313b9cd75",
+    "size": 640000,
+    "timestamp": 1495003834
+  }
+}

