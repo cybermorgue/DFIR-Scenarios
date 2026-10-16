@@ -1,0 +1,193 @@
+Received: from PAXPR04MB9010.eurprd04.prod.outlook.com (2001:db8:10a6:102:28d::12) by
+ AS8PR04MB8644.eurprd04.prod.outlook.com with HTTPS; Mon, 5 Oct 2026 08:02:13
+ +0000
+Received: from DU2PR04CA0181.eurprd04.prod.outlook.com (2001:db8:10a6:10:2fe::18)
+ by PAXPR04MB9010.eurprd04.prod.outlook.com (2001:db8:10a6:102:28d::12) with
+ Microsoft SMTP Server (version=TLS1_2,
+ cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.20.9182.24; Mon, 5 Oct 2026
+ 08:02:12 +0000
+Received: from DU6PEPF0000A7E2.eurprd02.prod.outlook.com
+ (2001:db8:10a6:10:2fe:cafe::d1) by DU2PR04CA0181.outlook.office365.com
+ (2001:db8:10a6:10:2fe::18) with Microsoft SMTP Server (version=TLS1_3,
+ cipher=TLS_AES_256_GCM_SHA384) id 15.20.9182.24 via Frontend Transport; Mon,
+ 5 Oct 2026 08:02:12 +0000
+Authentication-Results: spf=pass (sender IP is 2001:db8:a5f:200::7d1)
+ smtp.mailfrom=ardeal-labs.net; dkim=pass (signature was verified)
+ header.d=ardeal-labs.net;dmarc=pass action=none
+ header.from=ardeal-labs.net;compauth=pass reason=100
+Received-SPF: Pass (protection.outlook.com: domain of ardeal-labs.net
+ designates 2001:db8:a5f:200::7d1 as permitted sender)
+ receiver=protection.outlook.com; client-ip=2001:db8:a5f:200::7d1;
+ helo=EUR05-VI1-obe.outbound.protection.outlook.com; pr=C
+Received: from EUR05-VI1-obe.outbound.protection.outlook.com
+ (2001:db8:a5f:200::7d1) by DU6PEPF0000A7E2.mail.protection.outlook.com
+ (2001:db8:10a6:10:2fe:cafe::d1) with Microsoft SMTP Server (version=TLS1_3,
+ cipher=TLS_AES_256_GCM_SHA384) id 15.20.9182.24 via Frontend Transport; Mon,
+ 5 Oct 2026 08:02:11 +0000
+ARC-Seal: i=1; a=rsa-sha256; s=arcselector10001; d=microsoft.com; cv=none;
+ b=Rk2pV9sX1mQ4tW7zC0fH3jL6nP9rT2vY5bE8gK1oS4uX7aD0hJ3lN6qT9wZ2cF5iL8oR1uX4aD7g
+ J0mP3sV6yB9eH2kN5qT8wZ1cF4iL7oR0uX3aD6gJ9mP2sV5yB8eH1kN4qT7wZ0cF3iL6oR9uX2a==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=microsoft.com;
+ s=arcselector10001;
+ h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-AntiSpam-MessageData-ChunkCount:X-MS-Exchange-AntiSpam-MessageData-0:X-MS-Exchange-AntiSpam-MessageData-1;
+ bh=c3ludGhldGljLWJvZHktaGFzaC1hcmRlYWwtbGVnaXRpbW8=;
+ b=Tm5wQ2pLc1h2Qm5NcVJ0WXpBb0VmR2hJaktMbU5vUHFSc1R1Vnd4WXpBQkNERUZHSElKS0xN
+ Tk9QUVJTVFVWV1hZWmFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6MDEyMzQ1Njc4OQ==
+ARC-Authentication-Results: i=1; mx.microsoft.com 1; spf=pass
+ smtp.mailfrom=ardeal-labs.net; dmarc=pass action=none
+ header.from=ardeal-labs.net; dkim=pass header.d=ardeal-labs.net; arc=none
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=ardeal-labs.net;
+ s=selector1;
+ h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-SenderADCheck;
+ bh=YXJkZWFsLWxhYnMtbGVnaXRpbW8tY3VlcnBvLWZpY3RpY2lvLTAz;
+ b=Xq4Tz7Wc0Fi3Lo6Ru9Xa2Dg5Jm8Ps1Vy4Be7Hk0Nq3Tw6Zc9Fi2Lo5Ru8Xa1Dg4Jm7Ps0Vy3Be6Hk9N
+ q2Tw5Zc8Fi1Lo4Ru7Xa0Dg3Jm6Ps9Vy2Be5Hk8Nq1Tw4Zc7Fi0Lo3Ru6Xa9Dg2Jm5Ps8Vy1Be4Hk7Nq0T
+ w3Zc6Fi9Lo2Ru5Xa8Dg1Jm4Ps7Vy0Be3Hk6Nq9Tw2Zc5Fi8Lo1Ru4Xa7Dg0Jm3Ps6Vy9Be2Hk5Nq8Tw1Z==
+Received: from AM9PR04MB8123.eurprd04.prod.outlook.com (2001:db8:a5f:10::3c) by
+ GV1PR04MB9071.eurprd04.prod.outlook.com (2001:db8:a5f:10::5e) with Microsoft
+ SMTP Server (version=TLS1_2, cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id
+ 15.20.9182.24; Mon, 5 Oct 2026 08:02:09 +0000
+Received: from AM9PR04MB8123.eurprd04.prod.outlook.com
+ ([fe80::4c1d:9a2e:7b3f:d590]) by AM9PR04MB8123.eurprd04.prod.outlook.com
+ ([fe80::4c1d:9a2e:7b3f:d590%5]) with mapi id 15.20.9182.024; Mon, 5 Oct 2026
+ 08:02:09 +0000
+From: =?iso-8859-1?Q?Administraci=F3n_-_Laboratorios_Ardeal?=
+	<administracion@ardeal-labs.net>
+To: =?iso-8859-1?Q?Luc=EDa_Mar=EDn?= <lmarin@kelbrook-medical.net>
+Subject: =?iso-8859-1?Q?Factura_ARD-2026-0884_-_anal=EDticas_agosto?=
+Thread-Topic: =?iso-8859-1?Q?Factura_ARD-2026-0884_-_anal=EDticas_agosto?=
+Thread-Index: AdxDqU7rLk3f2a9TSvqBf0n1H2y8Gg==
+Date: Mon, 5 Oct 2026 08:02:08 +0000
+Message-ID: <AM9PR04MB8123B4F0C2D7E91A6533AM9PR04MB8123@AM9PR04MB8123.eurprd04.prod.outlook.com>
+Accept-Language: es-ES, en-US
+Content-Language: es-ES
+X-MS-Has-Attach: yes
+X-MS-TNEF-Correlator:
+msip_labels:
+Content-Type: multipart/mixed; boundary="_004_AM9PR04MB8123B4F0C2D7E91A6533AM9PR04MB8123eurp_"
+MIME-Version: 1.0
+Return-Path: administracion@ardeal-labs.net
+X-MS-Exchange-Organization-ExpirationStartTime: 05 Oct 2026 08:02:12.4407
+ (UTC)
+X-MS-Exchange-Organization-ExpirationStartTimeReason: OriginalSubmit
+X-MS-Exchange-Organization-ExpirationInterval: 1:00:00:00.0000000
+X-MS-Exchange-Organization-ExpirationIntervalReason: OriginalSubmit
+X-MS-Exchange-Organization-Network-Message-Id: a8e4c0b2-1d7f-4c39-9e65-2b0f8a3d71c4
+X-EOPAttributedMessage: 0
+X-EOPTenantAttributedMessage: 7c1e9a52-3b4d-4f60-8e2a-91d5c0b7f3a4:0
+X-MS-Exchange-Organization-MessageDirectionality: Incoming
+X-MS-PublicTrafficType: Email
+X-MS-TrafficTypeDiagnostic: DU6PEPF0000A7E2:EE_|PAXPR04MB9010:EE_|AS8PR04MB8644:EE_
+X-MS-Exchange-Organization-AuthSource: DU6PEPF0000A7E2.eurprd02.prod.outlook.com
+X-MS-Exchange-Organization-AuthAs: Anonymous
+X-MS-Office365-Filtering-Correlation-Id: a8e4c0b2-1d7f-4c39-9e65-2b0f8a3d71c4
+X-MS-Exchange-Organization-SCL: 1
+X-Microsoft-Antispam: BCL:0;ARA:13230040|8096899003|4022899009;
+X-Forefront-Antispam-Report: CIP:2001:db8:a5f:200::7d1;CTRY:;LANG:es;SCL:1;SRV:;IPV:NLI;SFV:NSPM;H:EUR05-VI1-obe.outbound.protection.outlook.com;PTR:mail-vi1eur05on2072.outbound.protection.outlook.com;CAT:NONE;SFS:(13230040)(8096899003)(4022899009);DIR:INB;
+X-MS-Exchange-CrossTenant-OriginalArrivalTime: 05 Oct 2026 08:02:11.9031
+ (UTC)
+X-MS-Exchange-CrossTenant-Network-Message-Id: a8e4c0b2-1d7f-4c39-9e65-2b0f8a3d71c4
+X-MS-Exchange-CrossTenant-Id: 7c1e9a52-3b4d-4f60-8e2a-91d5c0b7f3a4
+X-MS-Exchange-CrossTenant-AuthSource: DU6PEPF0000A7E2.eurprd02.prod.outlook.com
+X-MS-Exchange-CrossTenant-AuthAs: Anonymous
+X-MS-Exchange-CrossTenant-FromEntityHeader: Internet
+X-MS-Exchange-Transport-CrossTenantHeadersStamped: PAXPR04MB9010
+X-MS-Exchange-Transport-EndToEndLatency: 00:00:04.6912273
+X-MS-Exchange-Processed-By-BccFoldering: 15.20.9182.020
+X-Microsoft-Antispam-Mailbox-Delivery: ucf:0;jmr:0;auth:0;dest:I;ENG:(910005)(944506478)(944626604)(920097)(930097)(140003);
+X-Microsoft-Antispam-Message-Info: dGhpcyBpcyBzeW50aGV0aWMgZGF0YSAtIGxlZ2l0aW1hdGUgcmVmZXJlbmNlIG1lc3NhZ2UgLSBrZWxicm9vayAwMw==
+
+--_004_AM9PR04MB8123B4F0C2D7E91A6533AM9PR04MB8123eurp_
+Content-Type: multipart/alternative;
+	boundary="_000_AM9PR04MB8123B4F0C2D7E91A6533AM9PR04MB8123eurp_"
+
+--_000_AM9PR04MB8123B4F0C2D7E91A6533AM9PR04MB8123eurp_
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Buenos d=C3=ADas, Luc=C3=ADa:
+
+Le adjuntamos la factura ARD-2026-0884 correspondiente a las anal=C3=ADtica=
+s de agosto.
+
+Quedamos a su disposici=C3=B3n para cualquier consulta.
+
+Un saludo,
+
+Javier Ruiz Ortega
+Administraci=C3=B3n =C2=B7 Laboratorios Ardeal
+C/ de la Ciencia 14, 28000 Madrid =C2=B7 Tel. +34 910 000 427
+administracion@ardeal-labs.net =C2=B7 www.ardeal-labs.net
+
+--_000_AM9PR04MB8123B4F0C2D7E91A6533AM9PR04MB8123eurp_
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<html xmlns:o=3D"urn:schemas-microsoft-com:office:office" xmlns:w=3D"urn:sc=
+hemas-microsoft-com:office:word" xmlns:m=3D"http://schemas.microsoft.com/of=
+fice/2004/12/omml" xmlns=3D"http://www.w3.org/TR/REC-html40">
+<head>
+<meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3Dutf-8">
+<meta name=3D"Generator" content=3D"Microsoft Word 15 (filtered medium)">
+</head>
+<body lang=3D"ES" link=3D"#0563C1" vlink=3D"#954F72" style=3D"word-wrap:bre=
+ak-word">
+<div class=3D"WordSection1">
+<p class=3D"MsoNormal">Buenos d=C3=ADas, Luc=C3=ADa:</p>
+<p class=3D"MsoNormal">Le adjuntamos la factura ARD-2026-0884 correspondien=
+te a las anal=C3=ADticas de agosto.</p>
+<p class=3D"MsoNormal">Quedamos a su disposici=C3=B3n para cualquier consul=
+ta.</p>
+<p class=3D"MsoNormal">Un saludo,</p>
+<p class=3D"MsoNormal"><span style=3D"color:#1F3864">Javier Ruiz Ortega<br>
+Administraci=C3=B3n =C2=B7 Laboratorios Ardeal<br>
+C/ de la Ciencia 14, 28000 Madrid =C2=B7 Tel. +34 910 000 427<br>
+administracion@ardeal-labs.net =C2=B7 www.ardeal-labs.net</span></p>
+</div>
+</body>
+</html>
+
+--_000_AM9PR04MB8123B4F0C2D7E91A6533AM9PR04MB8123eurp_--
+
+--_004_AM9PR04MB8123B4F0C2D7E91A6533AM9PR04MB8123eurp_
+Content-Type: application/pdf; name="Factura_ARD-2026-0884.pdf"
+Content-Description: Factura_ARD-2026-0884.pdf
+Content-Disposition: attachment;
+	filename="Factura_ARD-2026-0884.pdf"; size=1761;
+	creation-date="Mon, 05 Oct 2026 08:01:58 GMT";
+	modification-date="Mon, 05 Oct 2026 08:02:08 GMT"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjcKJeLjz9MKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4K
+ZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4K
+ZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAg
+MCA1OTUgODQyXSAvUmVzb3VyY2VzIDw8IC9Gb250IDw8IC9GMSA0IDAgUiA+PiA+PiAvQ29udGVu
+dHMgNSAwIFIgPj4KZW5kb2JqCjQgMCBvYmoKPDwgL1R5cGUgL0ZvbnQgL1N1YnR5cGUgL1R5cGUx
+IC9CYXNlRm9udCAvSGVsdmV0aWNhIC9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nID4+CmVuZG9i
+ago1IDAgb2JqCjw8IC9MZW5ndGggOTQ3ID4+CnN0cmVhbQpCVAovRjEgMTUgVGYgMSAwIDAgMSA1
+NiA3OTAgVG0gKExBQk9SQVRPUklPUyBBUkRFQUwsIFMuTC4pIFRqCi9GMSA5IFRmIDEgMCAwIDEg
+NTYgNzY2IFRtIChDLyBkZSBsYSBDaWVuY2lhIDE0LCAyODAwMCBNYWRyaWQgLSBDSUYgQjAwMDAw
+MDAwKSBUagovRjEgOSBUZiAxIDAgMCAxIDU2IDc0OCBUbSAoKSBUagovRjEgMTMgVGYgMSAwIDAg
+MSA1NiA3MzAgVG0gKEZBQ1RVUkEgTi66IEFSRC0yMDI2LTA4ODQpIFRqCi9GMSA5IFRmIDEgMCAw
+IDEgNTYgNzA4IFRtIChGZWNoYSBkZSBlbWlzafNuOiAwMi8xMC8yMDI2KSBUagovRjEgOSBUZiAx
+IDAgMCAxIDU2IDY5MCBUbSAoKSBUagovRjEgMTAgVGYgMSAwIDAgMSA1NiA2NzIgVG0gKENsaWVu
+dGU6IEtlbGJyb29rIE1lZGljYWwgUGFydG5lcnMpIFRqCi9GMSAxMCBUZiAxIDAgMCAxIDU2IDY1
+MyBUbSAoQ29uY2VwdG86IEFuYWztdGljYXMgY2ztbmljYXMgLSBhZ29zdG8gMjAyNikgVGoKL0Yx
+IDEwIFRmIDEgMCAwIDEgNTYgNjM0IFRtIChO+m1lcm8gZGUgZGV0ZXJtaW5hY2lvbmVzOiAxLjE4
+NCkgVGoKL0YxIDEwIFRmIDEgMCAwIDEgNTYgNjE1IFRtIChCYXNlIGltcG9uaWJsZTogMTguOTQw
+LDAwIEVVUikgVGoKL0YxIDEwIFRmIDEgMCAwIDEgNTYgNTk2IFRtIChJVkEgXChleGVudG8sIGFy
+dC4gMjAuVW5vLjMuuiBMSVZBXCk6IDAsMDAgRVVSKSBUagovRjEgMTEgVGYgMSAwIDAgMSA1NiA1
+NzcgVG0gKFRPVEFMOiAxOC45NDAsMDAgRVVSKSBUagovRjEgOSBUZiAxIDAgMCAxIDU2IDU1NyBU
+bSAoKSBUagovRjEgOSBUZiAxIDAgMCAxIDU2IDUzOSBUbSAoRm9ybWEgZGUgcGFnbzogdHJhbnNm
+ZXJlbmNpYSBhIDMwIGTtYXMgYSBsYSBjdWVudGEgaGFiaXR1YWwuKSBUagovRjEgOSBUZiAxIDAg
+MCAxIDU2IDUyMSBUbSAoRG9jdW1lbnRvIGZpY3RpY2lvIC0gZXNjZW5hcmlvIGRlIGZvcm1hY2nz
+biBERklSKSBUagpFVAplbmRzdHJlYW0KZW5kb2JqCjYgMCBvYmoKPDwgL1RpdGxlIChGYWN0dXJh
+IEFSRC0yMDI2LTA4ODQpIC9BdXRob3IgKEphdmllciBSdWl6IE9ydGVnYSkgL1Byb2R1Y2VyIChN
+aWNyb3NvZnSuIFdvcmQgcGFyYSBNaWNyb3NvZnQgMzY1KSAvQ3JlYXRpb25EYXRlIChEOjIwMjYx
+MDAyMTAxMjA1KzAyJzAwJykgL01vZERhdGUgKEQ6MjAyNjEwMDIxMDEyMDUrMDInMDAnKSA+Pgpl
+bmRvYmoKeHJlZgowIDcKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDE1IDAwMDAwIG4gCjAw
+MDAwMDAwNjQgMDAwMDAgbiAKMDAwMDAwMDEyMSAwMDAwMCBuIAowMDAwMDAwMjQ3IDAwMDAwIG4g
+CjAwMDAwMDAzNDQgMDAwMDAgbiAKMDAwMDAwMTM0MiAwMDAwMCBuIAp0cmFpbGVyCjw8IC9TaXpl
+IDcgL1Jvb3QgMSAwIFIgL0luZm8gNiAwIFIgPj4Kc3RhcnR4cmVmCjE1NDUKJSVFT0YK
+
+--_004_AM9PR04MB8123B4F0C2D7E91A6533AM9PR04MB8123eurp_--

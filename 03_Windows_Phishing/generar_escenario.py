@@ -806,7 +806,7 @@ def build_lnk(*, target, entries, target_times, target_size, flags_extra=0, name
         share, letter = network
         netname = share.encode("cp1252") + b"\0"
         dev = letter.encode() + b"\0"
-        cnrl = struct.pack("<IIIIII", 0, 3, 0x14, 0x14 + len(netname), 0x00020000, 0) + netname + dev
+        cnrl = struct.pack("<IIIII", 0, 3, 0x14, 0x14 + len(netname), 0x00020000) + netname + dev
         cnrl = struct.pack("<I", len(cnrl)) + cnrl[4:]
         suffix = target[3:].encode("cp1252") + b"\0"
         li = struct.pack("<IIIIIII", 0, 0x1C, 2, 0, 0, 0x1C, 0x1C + len(cnrl)) + cnrl + suffix
@@ -2192,7 +2192,7 @@ def userassist_data(count, last_ft, focus_ms):
 def file_mtime(path):
     p = path.lower()
     if p.startswith(r"c:\windows") and "sysmon64" not in p:
-        return FT(2026, 10, 8, 12, 41, 3.2) if hash(p) % 3 else FT(2024, 4, 1, 6, 2, 51.0)
+        return FT(2026, 10, 8, 12, 41, 3.2) if zlib.crc32(p.encode()) % 3 else FT(2024, 4, 1, 6, 2, 51.0)
     if "office16" in p or "clicktorun" in p:
         return FT(2026, 9, 24, 3, 18, 44.0)
     if "edge" in p:
@@ -2493,3 +2493,572 @@ def build_amcache(sim):
                                     ("0006f0e1d2c3b4a5968778695a4b3c2d1e0f0000ffff", "Microsoft OneDrive", "25.184.0921.0002", MS, FT(2026, 9, 30, 22, 4, 17))):
         ia.key(pid_, t).set("Name", REG_SZ, name).set("Version", REG_SZ, ver).set("Publisher", REG_SZ, pub).set("Source", REG_SZ, "AddRemoveProgram")
     return write_hive(root, r"\??\C:\Windows\AppCompat\Programs\Amcache.hve", SD_MACHINE, seq=2210)
+
+
+# ======================================================================= PREFETCH Y RECENT
+NO_PREFETCH = {"smss.exe", "csrss.exe", "wininit.exe", "winlogon.exe", "services.exe", "lsass.exe", "msmpeng.exe",
+               "nissrv.exe", "mpdefendercoreservice.exe", "sysmon64.exe", "fontdrvhost.exe"}
+HOSTING = {"svchost.exe", "dllhost.exe", "backgroundtaskhost.exe"}
+BASE_DLLS = ["NTDLL.DLL", "KERNEL32.DLL", "KERNELBASE.DLL", "LOCALE.NLS", "APPHELP.DLL", "UCRTBASE.DLL", "MSVCRT.DLL",
+             "ADVAPI32.DLL", "SECHOST.DLL", "RPCRT4.DLL", "COMBASE.DLL", "BCRYPTPRIMITIVES.DLL", "USER32.DLL",
+             "WIN32U.DLL", "GDI32.DLL", "GDI32FULL.DLL", "MSVCP_WIN.DLL", "IMM32.DLL", "SHLWAPI.DLL", "OLEAUT32.DLL",
+             "KERNEL.APPCORE.DLL", "CRYPTBASE.DLL", "SSPICLI.DLL", "PROFAPI.DLL", "WINDOWS.STORAGE.DLL", "SHELL32.DLL",
+             "UXTHEME.DLL", "SORTDEFAULT.NLS"]
+EXTRA_DLLS = {
+    "powershell.exe": [r"\WINDOWS\SYSTEM32\ATL.DLL", r"\WINDOWS\SYSTEM32\MSCOREE.DLL", r"\WINDOWS\MICROSOFT.NET\FRAMEWORK64\V4.0.30319\MSCOREEI.DLL",
+                       r"\WINDOWS\MICROSOFT.NET\FRAMEWORK64\V4.0.30319\CLR.DLL", r"\WINDOWS\ASSEMBLY\NATIVEIMAGES_V4.0.30319_64\SYSTEM.MANAA57FC8CC#\8D3E1B2C5F7A9E0D4C6B8A1F3E5D7C9B\SYSTEM.MANAGEMENT.AUTOMATION.NI.DLL",
+                       r"\WINDOWS\SYSTEM32\WINHTTP.DLL", r"\WINDOWS\SYSTEM32\DNSAPI.DLL", r"\WINDOWS\SYSTEM32\AMSI.DLL",
+                       r"\USERS\LMARIN\APPDATA\LOCAL\TEMP\ARD-2026-0917.PDF", r"\USERS\LMARIN\APPDATA\LOCAL\MICROSOFT\ONEDRIVE\UPDATE\ONEDRIVEUPDATER.EXE"],
+    "onedriveupdater.exe": [r"\WINDOWS\SYSTEM32\WINHTTP.DLL", r"\WINDOWS\SYSTEM32\WS2_32.DLL", r"\WINDOWS\SYSTEM32\MSWSOCK.DLL",
+                            r"\WINDOWS\SYSTEM32\DNSAPI.DLL", r"\WINDOWS\SYSTEM32\CRYPT32.DLL", r"\WINDOWS\SYSTEM32\NCRYPT.DLL",
+                            r"\WINDOWS\SYSTEM32\SCHANNEL.DLL", r"\WINDOWS\SYSTEM32\IPHLPAPI.DLL"],
+    "tar.exe": [r"\WINDOWS\SYSTEM32\ARCHIVEINT.DLL", r"\USERS\LMARIN\APPDATA\LOCAL\TEMP\RM0926.ZIP"]
+               + ["\\DEVICE\\MUP\\FS01\\FACTURACION\\REMESAS\\2026-09\\" + f.upper() for f in REMESAS],
+    "curl.exe": [r"\WINDOWS\SYSTEM32\WS2_32.DLL", r"\WINDOWS\SYSTEM32\CRYPT32.DLL", r"\WINDOWS\SYSTEM32\SECUR32.DLL",
+                 r"\WINDOWS\SYSTEM32\SCHANNEL.DLL", r"\USERS\LMARIN\APPDATA\LOCAL\TEMP\RM0926.ZIP"],
+    "net.exe": [r"\WINDOWS\SYSTEM32\NETAPI32.DLL", r"\WINDOWS\SYSTEM32\NETUTILS.DLL", r"\WINDOWS\SYSTEM32\SAMCLI.DLL"],
+    "net1.exe": [r"\WINDOWS\SYSTEM32\NETAPI32.DLL", r"\WINDOWS\SYSTEM32\NETUTILS.DLL", r"\WINDOWS\SYSTEM32\SAMCLI.DLL", r"\WINDOWS\SYSTEM32\DSROLE.DLL"],
+    "nltest.exe": [r"\WINDOWS\SYSTEM32\LOGONCLI.DLL", r"\WINDOWS\SYSTEM32\NETAPI32.DLL"],
+    "cmd.exe": [r"\WINDOWS\SYSTEM32\CMDEXT.DLL"],
+}
+
+
+def build_prefetch_dir(sim):
+    rng = random.Random(30)
+    out = {}
+    groups = {}
+    for img, runs in sim.execs.items():
+        name = img.rsplit("\\", 1)[1]
+        if name in NO_PREFETCH or img.startswith("e:"):
+            continue
+        for t, p in runs:
+            if t + sec(10) > PREFETCH_COPY:
+                continue
+            gk = (img, p.cmd.split(" ", 1)[1] if name in HOSTING and " " in p.cmd else "")
+            groups.setdefault(gk, []).append((t, p))
+    for (img, args), runs in sorted(groups.items()):
+        real = runs[0][1].image
+        name = real.rsplit("\\", 1)[1]
+        rel = real[2:].upper()
+        dev = r"\DEVICE\HARDDISKVOLUME3" + rel + ((" " + args.upper()) if args else "")
+        files = [VOL_C + "\\WINDOWS\\SYSTEM32\\" + d for d in BASE_DLLS[:rng.randint(14, len(BASE_DLLS))]]
+        files += [VOL_C + x if x.startswith("\\WINDOWS") or x.startswith("\\USERS") else x for x in EXTRA_DLLS.get(name.lower(), [])]
+        files.insert(rng.randint(3, 8), VOL_C + rel)
+        files.append(VOL_C + "\\WINDOWS\\SYSTEM32\\ES-ES\\" + name.upper() + ".MUI")
+        dirs = sorted({f.rsplit("\\", 1)[0] for f in files if f.startswith(VOL_C)} | {VOL_C + r"\WINDOWS", VOL_C + r"\WINDOWS\SYSTEM32"})
+        vols = [{"path": VOL_C, "created": INSTALL, "serial": C_SERIAL, "dirs": dirs}]
+        times = sorted((t for t, _ in runs), reverse=True)
+        pfname, data = build_prefetch(name.upper(), dev, times[:8], len(times), files, vols, rng)
+        out[r"C:\Windows\Prefetch" + "\\" + pfname] = (data, min(times) + sec(10.3), times[0] + sec(10.3), PREFETCH_COPY)
+    return out
+
+
+def build_recent(sim):
+    rng = random.Random(31)
+    out = {}
+    first, last = {}, {}
+    for t, path, kind in sim.recent:
+        if t > RECENT_COPY:
+            continue
+        for p in (path, path.rsplit("\\", 1)[0]):
+            first[p] = min(t, first.get(p, t))
+            last[p] = max(t, last.get(p, 0))
+    vol_droid_c = uuid.UUID("7e1d2c3b-4a59-4687-9f0e-1d2c3b4a5968")
+    vol_droid_fs = uuid.UUID("b3c4d5e6-f7a8-4b9c-8d0e-1f2a3b4c5d6e")
+    for path, t_last in sorted(last.items()):
+        is_dir = "." not in path.rsplit("\\", 1)[1][-6:]
+        name = path.rsplit("\\", 1)[1]
+        comps = path[3:].split("\\")
+        tc = first[path] - sec(rng.uniform(3600, 86400 * 20))
+        tm = t_last - sec(rng.uniform(5, 3600)) if not is_dir else t_last
+        size = 0 if is_dir else rng.randint(24000, 900000)
+        entries = []
+        for i, c in enumerate(comps):
+            leaf = i == len(comps) - 1
+            entries.append((size if leaf else 0, tm, tc, t_last, (rng.randint(2000, 900000) | (rng.randint(1, 9) << 48)),
+                            (not leaf) or is_dir))
+        network = path.startswith("F:")
+        obj = droid_guid(tc, rng.randint(0, 0x3FFF), "00155d1e0a2d" if network else WS_MAC)
+        lnk = build_lnk(target=path, entries=entries, target_times=(tc, t_last, tm), target_size=size,
+                        flags_extra=0x80000,
+                        attrs=0x10 if is_dir else 0x20, volume=None if network else (3, C_SERIAL, ""),
+                        network=(r"\\fs01\Facturacion", "F:") if network else None,
+                        machine="fs01" if network else "kb-fin-ws03", vol_droid=vol_droid_fs if network else vol_droid_c,
+                        obj_droid=obj)
+        fname = name + ".lnk"
+        out[r"C:\Users\lmarin\AppData\Roaming\Microsoft\Windows\Recent" + "\\" + fname] = (lnk, first[path] + sec(0.4), t_last + sec(0.4), RECENT_COPY)
+    return out
+
+
+# ======================================================================= EDGE (History, SQLite de Chromium)
+HISTORY_SCHEMA = """
+CREATE TABLE meta(key LONGVARCHAR NOT NULL UNIQUE PRIMARY KEY, value LONGVARCHAR);
+CREATE TABLE urls(id INTEGER PRIMARY KEY AUTOINCREMENT,url LONGVARCHAR,title LONGVARCHAR,visit_count INTEGER DEFAULT 0 NOT NULL,typed_count INTEGER DEFAULT 0 NOT NULL,last_visit_time INTEGER NOT NULL,hidden INTEGER DEFAULT 0 NOT NULL);
+CREATE TABLE visits(id INTEGER PRIMARY KEY AUTOINCREMENT,url INTEGER NOT NULL,visit_time INTEGER NOT NULL,from_visit INTEGER,external_referrer_url TEXT,transition INTEGER DEFAULT 0 NOT NULL,segment_id INTEGER,visit_duration INTEGER DEFAULT 0 NOT NULL,incremented_omnibox_typed_score BOOLEAN DEFAULT FALSE NOT NULL,opener_visit INTEGER,originator_cache_guid TEXT,originator_visit_id INTEGER,originator_from_visit INTEGER,originator_opener_visit INTEGER,is_known_to_sync BOOLEAN DEFAULT FALSE NOT NULL,consider_for_ntp_most_visited BOOLEAN DEFAULT FALSE NOT NULL,visited_link_id INTEGER DEFAULT 0 NOT NULL,app_id TEXT);
+CREATE TABLE visit_source(id INTEGER PRIMARY KEY,source INTEGER NOT NULL);
+CREATE TABLE keyword_search_terms (keyword_id INTEGER NOT NULL,url_id INTEGER NOT NULL,term LONGVARCHAR NOT NULL,normalized_term LONGVARCHAR NOT NULL);
+CREATE TABLE downloads (id INTEGER PRIMARY KEY,guid VARCHAR NOT NULL,current_path LONGVARCHAR NOT NULL,target_path LONGVARCHAR NOT NULL,start_time INTEGER NOT NULL,received_bytes INTEGER NOT NULL,total_bytes INTEGER NOT NULL,state INTEGER NOT NULL,danger_type INTEGER NOT NULL,interrupt_reason INTEGER NOT NULL,hash BLOB NOT NULL,end_time INTEGER NOT NULL,opened INTEGER NOT NULL,last_access_time INTEGER NOT NULL,transient INTEGER NOT NULL,referrer VARCHAR NOT NULL,site_url VARCHAR NOT NULL,embedder_download_data VARCHAR NOT NULL,tab_url VARCHAR NOT NULL,tab_referrer_url VARCHAR NOT NULL,http_method VARCHAR NOT NULL,by_ext_id VARCHAR NOT NULL,by_ext_name VARCHAR NOT NULL,by_web_app_id VARCHAR NOT NULL,etag VARCHAR NOT NULL,last_modified VARCHAR NOT NULL,mime_type VARCHAR(255) NOT NULL,original_mime_type VARCHAR(255) NOT NULL);
+CREATE TABLE downloads_url_chains (id INTEGER NOT NULL,chain_index INTEGER NOT NULL,url LONGVARCHAR NOT NULL, PRIMARY KEY (id, chain_index) );
+CREATE TABLE downloads_slices (download_id INTEGER NOT NULL,offset INTEGER NOT NULL,received_bytes INTEGER NOT NULL,finished INTEGER NOT NULL DEFAULT 0,PRIMARY KEY (download_id, offset) );
+CREATE TABLE segments (id INTEGER PRIMARY KEY,name VARCHAR,url_id INTEGER NON NULL);
+CREATE TABLE segment_usage (id INTEGER PRIMARY KEY,segment_id INTEGER NOT NULL,time_slot INTEGER NOT NULL,visit_count INTEGER DEFAULT 0 NOT NULL);
+CREATE TABLE content_annotations (visit_id INTEGER PRIMARY KEY,visibility_score NUMERIC,floc_protected_score NUMERIC,categories VARCHAR,page_topics_model_version INTEGER,annotation_flags INTEGER NOT NULL,entities VARCHAR,related_searches VARCHAR,search_normalized_url VARCHAR,search_terms LONGVARCHAR,alternative_title VARCHAR,page_language VARCHAR,password_state INTEGER DEFAULT 0 NOT NULL,has_url_keyed_image BOOLEAN DEFAULT FALSE NOT NULL);
+CREATE TABLE context_annotations(visit_id INTEGER PRIMARY KEY,context_annotation_flags INTEGER NOT NULL,duration_since_last_visit INTEGER,page_end_reason INTEGER,total_foreground_duration INTEGER,browser_type INTEGER DEFAULT 0 NOT NULL,window_id INTEGER DEFAULT -1 NOT NULL,tab_id INTEGER DEFAULT -1 NOT NULL,task_id INTEGER DEFAULT -1 NOT NULL,root_task_id INTEGER DEFAULT -1 NOT NULL,parent_task_id INTEGER DEFAULT -1 NOT NULL,response_code INTEGER DEFAULT 0 NOT NULL);
+CREATE TABLE visited_links(id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,link_url_id INTEGER NOT NULL,top_level_url LONGVARCHAR NOT NULL,frame_url LONGVARCHAR NOT NULL,visit_count INTEGER DEFAULT 0 NOT NULL);
+CREATE TABLE history_sync_metadata (storage_key INTEGER PRIMARY KEY NOT NULL, value BLOB);
+CREATE INDEX visits_url_index ON visits (url);
+CREATE INDEX visits_from_index ON visits (from_visit);
+CREATE INDEX visits_time_index ON visits (visit_time);
+CREATE INDEX visits_originator_id_index ON visits (originator_visit_id);
+CREATE INDEX urls_url_index ON urls (url);
+CREATE INDEX keyword_search_terms_index1 ON keyword_search_terms (keyword_id, normalized_term);
+CREATE INDEX keyword_search_terms_index2 ON keyword_search_terms (url_id);
+CREATE INDEX keyword_search_terms_index3 ON keyword_search_terms (term);
+CREATE INDEX segments_name ON segments(name);
+CREATE INDEX segments_url_id ON segments(url_id);
+CREATE INDEX segment_usage_time_slot_segment_id ON segment_usage(time_slot, segment_id);
+CREATE INDEX segments_usage_seg_id ON segment_usage(segment_id);
+CREATE UNIQUE INDEX visited_links_index ON visited_links (link_url_id, top_level_url, frame_url);
+"""
+
+def webkit(ft):
+    return ft // 10          # microsegundos desde 1601: FILETIME / 10
+
+
+def build_history(sim):
+    cutoff = HIVE_COPY["History"]
+    keep_from = cutoff - sec(90 * 86400)       # Chromium expira el historial a los 90 días
+    visits = sorted((v for v in sim.edge if keep_from <= v[0] <= cutoff), key=lambda v: v[0])
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "History")
+        db = sqlite3.connect(path)
+        db.execute("PRAGMA page_size=4096")
+        db.executescript(HISTORY_SCHEMA)
+        db.executemany("INSERT INTO meta VALUES (?,?)", [("mmap_status", "-1"), ("version", "70"), ("last_compatible_version", "16"),
+                                                         ("early_expiration_threshold", str(webkit(keep_from)))])
+        ids, last_visit = {}, {}
+        rng = random.Random(32)
+        for t, url, title, tr in visits:
+            if url not in ids:
+                cur = db.execute("INSERT INTO urls (url,title,visit_count,typed_count,last_visit_time,hidden) VALUES (?,?,0,0,0,0)", (url, title))
+                ids[url] = cur.lastrowid
+            uid = ids[url]
+            typed = 1 if (tr & 0xFF) == 1 else 0
+            db.execute("UPDATE urls SET visit_count=visit_count+1, typed_count=typed_count+?, last_visit_time=? WHERE id=?",
+                       (typed, webkit(t), uid))
+            cur = db.execute("INSERT INTO visits (url,visit_time,from_visit,external_referrer_url,transition,segment_id,visit_duration,"
+                             "incremented_omnibox_typed_score,opener_visit,originator_cache_guid,originator_visit_id,originator_from_visit,"
+                             "originator_opener_visit,is_known_to_sync,consider_for_ntp_most_visited,visited_link_id,app_id) "
+                             "VALUES (?,?,0,'',?,0,?,?,0,'',0,0,0,0,?,0,'')",
+                             (uid, webkit(t), tr, rng.randint(2, 900) * 1_000_000, typed, 0 if url.startswith("file:") else 1))
+            vid = cur.lastrowid
+            db.execute("INSERT INTO context_annotations (visit_id,context_annotation_flags,duration_since_last_visit,page_end_reason,"
+                       "total_foreground_duration,browser_type,window_id,tab_id,task_id,root_task_id,parent_task_id,response_code) "
+                       "VALUES (?,0,-1,0,-1,1,?,?,-1,-1,-1,?)", (vid, rng.randint(1, 9) * 1000 + 3, rng.randint(100, 900), 0 if url.startswith("file:") else 200))
+            if "bing.com/search" in url:
+                q = url.split("q=")[1].split("&")[0].replace("+", " ")
+                from urllib.parse import unquote
+                q = unquote(q)
+                db.execute("INSERT INTO keyword_search_terms VALUES (2,?,?,?)", (uid, q, q.lower()))
+        db.commit()
+        db.close()
+        with open(path, "rb") as f:
+            return f.read()
+
+
+JTORRES_PSHIST = """gpupdate /force
+Get-ComputerInfo | Select-Object WindowsProductName, OsBuildNumber, CsDomain
+Get-LocalGroupMember -Group Administradores
+Test-NetConnection fs01 -Port 445
+Get-SmbMapping
+Get-Printer | Select-Object Name, DriverName, PortName
+Get-Service Sysmon64, WinDefend | Format-Table -AutoSize
+"""
+
+
+# ======================================================================= CORREOS
+TENANT_KB = "7c1e9a52-3b4d-4f60-8e2a-91d5c0b7f3a4"
+TENANT_ARD = "e2b85f17-6a3c-4d9e-b014-5c7a9e2f1d68"
+
+def attacker_lnk():
+    PS = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+    tc, ta, tw = FT(2024, 4, 1, 6, 3, 11.0), FT(2026, 10, 12, 16, 39, 52.6), FT(2024, 4, 1, 6, 3, 11.0)
+    refs = [0x1000000000003A1, 0x100000000001A2B, 0x1000000000039C4, 0x1000000000039D7, 0x1000000000A1B2]
+    ent = [(0, tw, tc, ta, refs[0], True), (0, tw, tc, ta, refs[1], True), (0, tw, tc, ta, refs[2], True),
+           (0, tw, tc, ta, refs[3], True), (450560, tw, tc, ta, refs[4], False)]
+    return build_lnk(target=PS, entries=ent, target_times=(tc, ta, tw), target_size=450560, name="Factura ARD-2026-0917",
+                     rel=r"..\..\..\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", workdir="%TEMP%",
+                     args=LNK_ARGS, icon=r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe",
+                     icon_env=r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe", icon_index=11, show=7,
+                     volume=(3, 0x7C3A91E2, ""), machine="desktop-r4k9t2m",
+                     vol_droid=uuid.UUID("3f2a7c11-9b4e-4d2a-8c61-5e0f1d2a3b4c"),
+                     obj_droid=droid_guid(FT(2026, 10, 12, 16, 38, 0.0), 0x1A2B, ATK_MAC),
+                     known_folder=("{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}", 0x25, 1))
+
+
+def attacker_zip(lnk):
+    bio = io.BytesIO()
+    with zipfile.ZipFile(bio, "w", zipfile.ZIP_DEFLATED) as z:
+        zi = zipfile.ZipInfo(LNK_NAME, date_time=(2026, 10, 12, 18, 41, 6))
+        zi.create_system, zi.external_attr, zi.compress_type = 0, 0x20, zipfile.ZIP_DEFLATED
+        z.writestr(zi, lnk)
+    return bio.getvalue()
+
+
+SIGN_LEGIT = """Javier Ruiz Ortega
+Administración · Laboratorios Ardeal
+C/ de la Ciencia 14, 28000 Madrid · Tel. +34 910 000 427
+administracion@ardeal-labs.net · www.ardeal-labs.net"""
+SIGN_PHISH = SIGN_LEGIT.replace("910 000 427", "910 000 472")
+
+
+def _html(paragraphs, sign, outlook=False):
+    body = "".join(f"<p>{p}</p>\n" for p in paragraphs)
+    sig = "<br>\n".join(sign.splitlines())
+    if outlook:
+        return ('<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" '
+                'xmlns:m="http://schemas.microsoft.com/office/2004/12/omml" xmlns="http://www.w3.org/TR/REC-html40">\n'
+                '<head>\n<meta http-equiv="Content-Type" content="text/html; charset=utf-8">\n<meta name="Generator" content="Microsoft Word 15 (filtered medium)">\n'
+                '</head>\n<body lang="ES" link="#0563C1" vlink="#954F72" style="word-wrap:break-word">\n<div class="WordSection1">\n'
+                + body.replace("<p>", '<p class="MsoNormal">') + f'<p class="MsoNormal"><span style="color:#1F3864">{sig}</span></p>\n</div>\n</body>\n</html>\n')
+    return ('<!DOCTYPE html>\n<html>\n  <head>\n    <meta http-equiv="content-type" content="text/html; charset=UTF-8">\n  </head>\n'
+            f'  <body>\n{body}    <div class="moz-signature">-- <br>\n{sig}</div>\n  </body>\n</html>\n')
+
+
+def build_phish_eml(zip_bytes):
+    paras = ["Buenos días, Lucía:",
+             "Tal y como comentamos en la conciliación, le adjunto la factura rectificativa ARD-2026-0917 correspondiente "
+             "a las analíticas de septiembre, con el ajuste aplicado. Le agradecería que la revisara antes del cierre del jueves.",
+             "Un saludo,"]
+    text = "\n\n".join(paras) + "\n\n-- \n" + SIGN_PHISH + "\n"
+    html = _html(paras, SIGN_PHISH)
+    b1, b2 = "------------Kq3Zr0Vx7Tn2Lm5Pa8Wd1Ys4", "------------Jf6Hc9Bu2Ne5Rg8Ti1Ok4Mw7"
+    nmid = "3d7c1f9a-58e2-4b06-a1c4-7e9f2d6b0835"
+    h = f"""Received: from PAXPR04MB9010.eurprd04.prod.outlook.com (2001:db8:10a6:102:28d::12) by
+ AS8PR04MB8644.eurprd04.prod.outlook.com with HTTPS; Tue, 13 Oct 2026 07:14:24
+ +0000
+Received: from DU7P251CA0012.EURP251.PROD.OUTLOOK.COM (2001:db8:10a6:10:4d8::9)
+ by PAXPR04MB9010.eurprd04.prod.outlook.com (2001:db8:10a6:102:28d::12) with
+ Microsoft SMTP Server (version=TLS1_2,
+ cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.20.9182.24; Tue, 13 Oct
+ 2026 07:14:23 +0000
+Received: from DU2PEPF00028D0B.eurprd03.prod.outlook.com
+ (2001:db8:10a6:10:4d8:cafe::7c) by DU7P251CA0012.outlook.office365.com
+ (2001:db8:10a6:10:4d8::9) with Microsoft SMTP Server (version=TLS1_3,
+ cipher=TLS_AES_256_GCM_SHA384) id 15.20.9182.24 via Frontend Transport; Tue,
+ 13 Oct 2026 07:14:23 +0000
+Authentication-Results: spf=pass (sender IP is 198.51.100.89)
+ smtp.mailfrom=ardeal-lab.net; dkim=pass (signature was verified)
+ header.d=ardeal-lab.net;dmarc=pass action=none
+ header.from=ardeal-lab.net;compauth=pass reason=100
+Received-SPF: Pass (protection.outlook.com: domain of ardeal-lab.net designates
+ 198.51.100.89 as permitted sender) receiver=protection.outlook.com;
+ client-ip=198.51.100.89; helo=mail.ardeal-lab.net; pr=C
+Received: from mail.ardeal-lab.net (198.51.100.89) by
+ DU2PEPF00028D0B.mail.protection.outlook.com (2001:db8:10a6:10:4d8:cafe::7c)
+ with Microsoft SMTP Server (version=TLS1_3, cipher=TLS_AES_256_GCM_SHA384) id
+ 15.20.9182.24 via Frontend Transport; Tue, 13 Oct 2026 07:14:22 +0000
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=ardeal-lab.net;
+\ts=mail; t=1791875658;
+\tbh=Wm9vbVhxN2VhR3ZNZ0pqUmZ0b3p1Q2xzS0hMd0tqWVE9;
+\th=Date:To:From:Subject:From;
+\tb=k3Q9mZpVn2JfX8rT1cL5wY0hD7aG4sB6eN3uI9oP2qR5tK8vM1xC4zF7jH0lW3yE6bA9dS2gU5i
+\t Ox8nR1pT4vQ7sY0wZ3cB6eF9hK2mN5qL8tJ1uX4aD7gG0jI3lM6oP9rS2vU5yW8bA1dE4hH7kK0n
+\t Q3tT6wZ9cF2iL5oR8uX1aD4gJ7mP0sV3yB6eH9kN2qT5wZ8c=
+Received: from [192.168.1.37] (unknown [203.0.113.201])
+\t(Authenticated sender: administracion@ardeal-lab.net)
+\tby mail.ardeal-lab.net (Postfix) with ESMTPSA id 4F1A2C0D3E
+\tfor <lmarin@kelbrook-medical.net>; Tue, 13 Oct 2026 07:14:18 +0000 (UTC)
+Message-ID: <20261013071418.4F1A2C0D3E@mail.ardeal-lab.net>
+Date: Tue, 13 Oct 2026 09:14:18 +0200
+MIME-Version: 1.0
+User-Agent: Mozilla Thunderbird
+Content-Language: es-ES
+To: =?UTF-8?Q?Luc=C3=ADa_Mar=C3=ADn?= <lmarin@kelbrook-medical.net>
+From: =?UTF-8?Q?Administraci=C3=B3n_Laboratorios_Ardeal?= <administracion@ardeal-lab.net>
+Subject: =?UTF-8?Q?Factura_rectificativa_ARD-2026-0917_-_conciliaci=C3=B3n_septiembre?=
+Content-Type: multipart/mixed; boundary="{b1}"
+Return-Path: administracion@ardeal-lab.net
+X-MS-Exchange-Organization-ExpirationStartTime: 13 Oct 2026 07:14:23.0154
+ (UTC)
+X-MS-Exchange-Organization-ExpirationStartTimeReason: OriginalSubmit
+X-MS-Exchange-Organization-ExpirationInterval: 1:00:00:00.0000000
+X-MS-Exchange-Organization-ExpirationIntervalReason: OriginalSubmit
+X-MS-Exchange-Organization-Network-Message-Id: {nmid}
+X-EOPAttributedMessage: 0
+X-EOPTenantAttributedMessage: {TENANT_KB}:0
+X-MS-Exchange-Organization-MessageDirectionality: Incoming
+X-MS-PublicTrafficType: Email
+X-MS-TrafficTypeDiagnostic: DU2PEPF00028D0B:EE_|PAXPR04MB9010:EE_|AS8PR04MB8644:EE_
+X-MS-Exchange-Organization-AuthSource: DU2PEPF00028D0B.eurprd03.prod.outlook.com
+X-MS-Exchange-Organization-AuthAs: Anonymous
+X-MS-Office365-Filtering-Correlation-Id: {nmid}
+X-MS-Exchange-Organization-SCL: 1
+X-Microsoft-Antispam: BCL:0;ARA:13230040|4022899009|2066899003|43062017|8096899003;
+X-Forefront-Antispam-Report: CIP:198.51.100.89;CTRY:NL;LANG:es;SCL:1;SRV:;IPV:NLI;SFV:NSPM;H:mail.ardeal-lab.net;PTR:mail.ardeal-lab.net;CAT:NONE;SFS:(13230040)(4022899009)(2066899003)(43062017)(8096899003);DIR:INB;
+X-MS-Exchange-CrossTenant-OriginalArrivalTime: 13 Oct 2026 07:14:22.8125
+ (UTC)
+X-MS-Exchange-CrossTenant-Network-Message-Id: {nmid}
+X-MS-Exchange-CrossTenant-Id: {TENANT_KB}
+X-MS-Exchange-CrossTenant-AuthSource: DU2PEPF00028D0B.eurprd03.prod.outlook.com
+X-MS-Exchange-CrossTenant-AuthAs: Anonymous
+X-MS-Exchange-CrossTenant-FromEntityHeader: Internet
+X-MS-Exchange-Transport-CrossTenantHeadersStamped: PAXPR04MB9010
+X-MS-Exchange-Transport-EndToEndLatency: 00:00:02.1180428
+X-MS-Exchange-Processed-By-BccFoldering: 15.20.9182.020
+X-Microsoft-Antispam-Mailbox-Delivery: ucf:0;jmr:0;auth:0;dest:I;ENG:(910005)(944506478)(944626604)(920097)(930097)(140003);
+X-Microsoft-Antispam-Message-Info: dGhpcyBpcyBzeW50aGV0aWMgZGF0YSBmb3IgYSBERklSIHRyYWluaW5nIHNjZW5hcmlvIC0ga2VsYnJvb2sgMDM=
+"""
+    parts = (f"This is a multi-part message in MIME format.\n--{b1}\nContent-Type: multipart/alternative;\n boundary=\"{b2}\"\n\n"
+             f"--{b2}\nContent-Type: text/plain; charset=UTF-8; format=flowed\nContent-Transfer-Encoding: quoted-printable\n\n"
+             f"{qp(text)}\n--{b2}\nContent-Type: text/html; charset=UTF-8\nContent-Transfer-Encoding: quoted-printable\n\n"
+             f"{qp(html)}\n--{b2}--\n--{b1}\nContent-Type: application/x-zip-compressed; name=\"{ZIP_NAME}\"\n"
+             f"Content-Disposition: attachment; filename=\"{ZIP_NAME}\"\nContent-Transfer-Encoding: base64\n\n"
+             f"{b64_lines(zip_bytes, 72)}\n\n--{b1}--\n")
+    return (h + "\n" + parts).replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
+
+
+def legit_pdf():
+    return build_pdf([(15, "LABORATORIOS ARDEAL, S.L."), (9, "C/ de la Ciencia 14, 28000 Madrid - CIF B00000000"), (9, ""),
+                      (13, "FACTURA N.º ARD-2026-0884"), (9, "Fecha de emisión: 02/10/2026"), (9, ""),
+                      (10, "Cliente: Kelbrook Medical Partners"), (10, "Concepto: Analíticas clínicas - agosto 2026"),
+                      (10, "Número de determinaciones: 1.184"), (10, "Base imponible: 18.940,00 EUR"),
+                      (10, "IVA (exento, art. 20.Uno.3.º LIVA): 0,00 EUR"), (11, "TOTAL: 18.940,00 EUR"), (9, ""),
+                      (9, "Forma de pago: transferencia a 30 días a la cuenta habitual."), (9, "Documento ficticio - escenario de formación DFIR")],
+                     "Factura ARD-2026-0884", "Javier Ruiz Ortega", "Microsoft® Word para Microsoft 365", "D:20261002101205+02'00'")
+
+
+def build_legit_eml():
+    pdf = legit_pdf()
+    paras = ["Buenos días, Lucía:", "Le adjuntamos la factura ARD-2026-0884 correspondiente a las analíticas de agosto.",
+             "Quedamos a su disposición para cualquier consulta.", "Un saludo,"]
+    text = "\n\n".join(paras) + "\n\n" + SIGN_LEGIT + "\n"
+    html = _html(paras, SIGN_LEGIT, outlook=True)
+    b1, b2 = "_004_AM9PR04MB8123B4F0C2D7E91A6533AM9PR04MB8123eurp_", "_000_AM9PR04MB8123B4F0C2D7E91A6533AM9PR04MB8123eurp_"
+    nmid = "a8e4c0b2-1d7f-4c39-9e65-2b0f8a3d71c4"
+    h = f"""Received: from PAXPR04MB9010.eurprd04.prod.outlook.com (2001:db8:10a6:102:28d::12) by
+ AS8PR04MB8644.eurprd04.prod.outlook.com with HTTPS; Mon, 5 Oct 2026 08:02:13
+ +0000
+Received: from DU2PR04CA0181.eurprd04.prod.outlook.com (2001:db8:10a6:10:2fe::18)
+ by PAXPR04MB9010.eurprd04.prod.outlook.com (2001:db8:10a6:102:28d::12) with
+ Microsoft SMTP Server (version=TLS1_2,
+ cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.20.9182.24; Mon, 5 Oct 2026
+ 08:02:12 +0000
+Received: from DU6PEPF0000A7E2.eurprd02.prod.outlook.com
+ (2001:db8:10a6:10:2fe:cafe::d1) by DU2PR04CA0181.outlook.office365.com
+ (2001:db8:10a6:10:2fe::18) with Microsoft SMTP Server (version=TLS1_3,
+ cipher=TLS_AES_256_GCM_SHA384) id 15.20.9182.24 via Frontend Transport; Mon,
+ 5 Oct 2026 08:02:12 +0000
+Authentication-Results: spf=pass (sender IP is 2001:db8:a5f:200::7d1)
+ smtp.mailfrom=ardeal-labs.net; dkim=pass (signature was verified)
+ header.d=ardeal-labs.net;dmarc=pass action=none
+ header.from=ardeal-labs.net;compauth=pass reason=100
+Received-SPF: Pass (protection.outlook.com: domain of ardeal-labs.net
+ designates 2001:db8:a5f:200::7d1 as permitted sender)
+ receiver=protection.outlook.com; client-ip=2001:db8:a5f:200::7d1;
+ helo=EUR05-VI1-obe.outbound.protection.outlook.com; pr=C
+Received: from EUR05-VI1-obe.outbound.protection.outlook.com
+ (2001:db8:a5f:200::7d1) by DU6PEPF0000A7E2.mail.protection.outlook.com
+ (2001:db8:10a6:10:2fe:cafe::d1) with Microsoft SMTP Server (version=TLS1_3,
+ cipher=TLS_AES_256_GCM_SHA384) id 15.20.9182.24 via Frontend Transport; Mon,
+ 5 Oct 2026 08:02:11 +0000
+ARC-Seal: i=1; a=rsa-sha256; s=arcselector10001; d=microsoft.com; cv=none;
+ b=Rk2pV9sX1mQ4tW7zC0fH3jL6nP9rT2vY5bE8gK1oS4uX7aD0hJ3lN6qT9wZ2cF5iL8oR1uX4aD7g
+ J0mP3sV6yB9eH2kN5qT8wZ1cF4iL7oR0uX3aD6gJ9mP2sV5yB8eH1kN4qT7wZ0cF3iL6oR9uX2a==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=microsoft.com;
+ s=arcselector10001;
+ h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-AntiSpam-MessageData-ChunkCount:X-MS-Exchange-AntiSpam-MessageData-0:X-MS-Exchange-AntiSpam-MessageData-1;
+ bh=c3ludGhldGljLWJvZHktaGFzaC1hcmRlYWwtbGVnaXRpbW8=;
+ b=Tm5wQ2pLc1h2Qm5NcVJ0WXpBb0VmR2hJaktMbU5vUHFSc1R1Vnd4WXpBQkNERUZHSElKS0xN
+ Tk9QUVJTVFVWV1hZWmFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6MDEyMzQ1Njc4OQ==
+ARC-Authentication-Results: i=1; mx.microsoft.com 1; spf=pass
+ smtp.mailfrom=ardeal-labs.net; dmarc=pass action=none
+ header.from=ardeal-labs.net; dkim=pass header.d=ardeal-labs.net; arc=none
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=ardeal-labs.net;
+ s=selector1;
+ h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-SenderADCheck;
+ bh=YXJkZWFsLWxhYnMtbGVnaXRpbW8tY3VlcnBvLWZpY3RpY2lvLTAz;
+ b=Xq4Tz7Wc0Fi3Lo6Ru9Xa2Dg5Jm8Ps1Vy4Be7Hk0Nq3Tw6Zc9Fi2Lo5Ru8Xa1Dg4Jm7Ps0Vy3Be6Hk9N
+ q2Tw5Zc8Fi1Lo4Ru7Xa0Dg3Jm6Ps9Vy2Be5Hk8Nq1Tw4Zc7Fi0Lo3Ru6Xa9Dg2Jm5Ps8Vy1Be4Hk7Nq0T
+ w3Zc6Fi9Lo2Ru5Xa8Dg1Jm4Ps7Vy0Be3Hk6Nq9Tw2Zc5Fi8Lo1Ru4Xa7Dg0Jm3Ps6Vy9Be2Hk5Nq8Tw1Z==
+Received: from AM9PR04MB8123.eurprd04.prod.outlook.com (2001:db8:a5f:10::3c) by
+ GV1PR04MB9071.eurprd04.prod.outlook.com (2001:db8:a5f:10::5e) with Microsoft
+ SMTP Server (version=TLS1_2, cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id
+ 15.20.9182.24; Mon, 5 Oct 2026 08:02:09 +0000
+Received: from AM9PR04MB8123.eurprd04.prod.outlook.com
+ ([fe80::4c1d:9a2e:7b3f:d590]) by AM9PR04MB8123.eurprd04.prod.outlook.com
+ ([fe80::4c1d:9a2e:7b3f:d590%5]) with mapi id 15.20.9182.024; Mon, 5 Oct 2026
+ 08:02:09 +0000
+From: =?iso-8859-1?Q?Administraci=F3n_-_Laboratorios_Ardeal?=
+\t<administracion@ardeal-labs.net>
+To: =?iso-8859-1?Q?Luc=EDa_Mar=EDn?= <lmarin@kelbrook-medical.net>
+Subject: =?iso-8859-1?Q?Factura_ARD-2026-0884_-_anal=EDticas_agosto?=
+Thread-Topic: =?iso-8859-1?Q?Factura_ARD-2026-0884_-_anal=EDticas_agosto?=
+Thread-Index: AdxDqU7rLk3f2a9TSvqBf0n1H2y8Gg==
+Date: Mon, 5 Oct 2026 08:02:08 +0000
+Message-ID: <AM9PR04MB8123B4F0C2D7E91A6533AM9PR04MB8123@AM9PR04MB8123.eurprd04.prod.outlook.com>
+Accept-Language: es-ES, en-US
+Content-Language: es-ES
+X-MS-Has-Attach: yes
+X-MS-TNEF-Correlator:
+msip_labels:
+Content-Type: multipart/mixed; boundary="{b1}"
+MIME-Version: 1.0
+Return-Path: administracion@ardeal-labs.net
+X-MS-Exchange-Organization-ExpirationStartTime: 05 Oct 2026 08:02:12.4407
+ (UTC)
+X-MS-Exchange-Organization-ExpirationStartTimeReason: OriginalSubmit
+X-MS-Exchange-Organization-ExpirationInterval: 1:00:00:00.0000000
+X-MS-Exchange-Organization-ExpirationIntervalReason: OriginalSubmit
+X-MS-Exchange-Organization-Network-Message-Id: {nmid}
+X-EOPAttributedMessage: 0
+X-EOPTenantAttributedMessage: {TENANT_KB}:0
+X-MS-Exchange-Organization-MessageDirectionality: Incoming
+X-MS-PublicTrafficType: Email
+X-MS-TrafficTypeDiagnostic: DU6PEPF0000A7E2:EE_|PAXPR04MB9010:EE_|AS8PR04MB8644:EE_
+X-MS-Exchange-Organization-AuthSource: DU6PEPF0000A7E2.eurprd02.prod.outlook.com
+X-MS-Exchange-Organization-AuthAs: Anonymous
+X-MS-Office365-Filtering-Correlation-Id: {nmid}
+X-MS-Exchange-Organization-SCL: 1
+X-Microsoft-Antispam: BCL:0;ARA:13230040|8096899003|4022899009;
+X-Forefront-Antispam-Report: CIP:2001:db8:a5f:200::7d1;CTRY:;LANG:es;SCL:1;SRV:;IPV:NLI;SFV:NSPM;H:EUR05-VI1-obe.outbound.protection.outlook.com;PTR:mail-vi1eur05on2072.outbound.protection.outlook.com;CAT:NONE;SFS:(13230040)(8096899003)(4022899009);DIR:INB;
+X-MS-Exchange-CrossTenant-OriginalArrivalTime: 05 Oct 2026 08:02:11.9031
+ (UTC)
+X-MS-Exchange-CrossTenant-Network-Message-Id: {nmid}
+X-MS-Exchange-CrossTenant-Id: {TENANT_KB}
+X-MS-Exchange-CrossTenant-AuthSource: DU6PEPF0000A7E2.eurprd02.prod.outlook.com
+X-MS-Exchange-CrossTenant-AuthAs: Anonymous
+X-MS-Exchange-CrossTenant-FromEntityHeader: Internet
+X-MS-Exchange-Transport-CrossTenantHeadersStamped: PAXPR04MB9010
+X-MS-Exchange-Transport-EndToEndLatency: 00:00:04.6912273
+X-MS-Exchange-Processed-By-BccFoldering: 15.20.9182.020
+X-Microsoft-Antispam-Mailbox-Delivery: ucf:0;jmr:0;auth:0;dest:I;ENG:(910005)(944506478)(944626604)(920097)(930097)(140003);
+X-Microsoft-Antispam-Message-Info: dGhpcyBpcyBzeW50aGV0aWMgZGF0YSAtIGxlZ2l0aW1hdGUgcmVmZXJlbmNlIG1lc3NhZ2UgLSBrZWxicm9vayAwMw==
+"""
+    parts = (f"--{b1}\nContent-Type: multipart/alternative;\n\tboundary=\"{b2}\"\n\n"
+             f"--{b2}\nContent-Type: text/plain; charset=\"utf-8\"\nContent-Transfer-Encoding: quoted-printable\n\n{qp(text)}\n"
+             f"--{b2}\nContent-Type: text/html; charset=\"utf-8\"\nContent-Transfer-Encoding: quoted-printable\n\n{qp(html)}\n"
+             f"--{b2}--\n\n--{b1}\nContent-Type: application/pdf; name=\"Factura_ARD-2026-0884.pdf\"\n"
+             f"Content-Description: Factura_ARD-2026-0884.pdf\nContent-Disposition: attachment;\n\tfilename=\"Factura_ARD-2026-0884.pdf\"; size={len(pdf)};\n"
+             f"\tcreation-date=\"Mon, 05 Oct 2026 08:01:58 GMT\";\n\tmodification-date=\"Mon, 05 Oct 2026 08:02:08 GMT\"\n"
+             f"Content-Transfer-Encoding: base64\n\n{b64_lines(pdf, 76)}\n\n--{b1}--\n")
+    return (h + "\n" + parts).replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
+
+
+# ======================================================================= KAPE Y SALIDA
+TDEST = r"E:\triage\KB-FIN-WS03"
+
+def kape_package(sim):
+    files = {}       # ruta origen -> (bytes, creado, modificado, hora de copia, diferido)
+    for p, (d, c, m, ct) in build_evtx(sim).items():
+        files[p] = (d, c, m, ct, True)
+    hives = {
+        r"C:\Windows\System32\config\SYSTEM": (build_system(sim), INSTALL, T(13, 10, 8, 45.2), HIVE_COPY["SYSTEM"]),
+        r"C:\Windows\System32\config\SOFTWARE": (build_software(sim), INSTALL, T(13, 10, 6, 21.6), HIVE_COPY["SOFTWARE"]),
+        r"C:\Windows\appcompat\Programs\Amcache.hve": (build_amcache(sim), INSTALL + sec(900), T(13, 10, 10, 17.3), HIVE_COPY["Amcache"]),
+        r"C:\Users\lmarin\NTUSER.DAT": (build_ntuser_lmarin(sim), LOCAL(3, 17, 8, 44, 12), T(13, 9, 18, 44.0), HIVE_COPY["NTUSER_lmarin"]),
+        r"C:\Users\adm.jtorres\NTUSER.DAT": (build_ntuser_jtorres(sim), INSTALL + sec(1366), T(13, 10, 9, 59.9), HIVE_COPY["NTUSER_jtorres"]),
+    }
+    for p, (d, c, m, ct) in hives.items():
+        files[p] = (d, c, m, ct, True)
+        for ext in (".LOG1", ".LOG2"):
+            lp = (p.rsplit("\\", 1)[0] + "\\ntuser.dat" + ext) if p.endswith("NTUSER.DAT") else p + ext
+            files[lp] = (b"", c, c, ct + sec(0.3 if ext == ".LOG1" else 0.5), True)
+    for p, (d, c, m, ct) in build_prefetch_dir(sim).items():
+        files[p] = (d, c, m, ct, False)
+    for p, (d, c, m, ct) in build_recent(sim).items():
+        files[p] = (d, c, m, ct, False)
+    files[r"C:\Users\lmarin\AppData\Local\Microsoft\Edge\User Data\Default\History"] = (
+        build_history(sim), LOCAL(3, 17, 8, 46, 2), T(13, 9, 19, 2.4), HIVE_COPY["History"], True)
+    files[r"C:\Users\adm.jtorres\AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt"] = (
+        JTORRES_PSHIST.replace("\n", "\r\n").encode("utf-8"), INSTALL + sec(1790), LOCAL(6, 18, 11, 37, 4), T(13, 10, 10, 23.0), False)
+    order = sorted(files.items(), key=lambda kv: (kv[1][4], kv[1][3], kv[0].lower()))
+    return files, order
+
+
+def write_outputs(sim):
+    os.makedirs(os.path.join(BASE, "correo"), exist_ok=True)
+    os.makedirs(os.path.join(BASE, "triage"), exist_ok=True)
+    lnk = attacker_lnk()
+    zbytes = attacker_zip(lnk)
+    phish = build_phish_eml(zbytes)
+    legit = build_legit_eml()
+    with open(os.path.join(BASE, "correo", "reportado_Factura_rectificativa_ARD-2026-0917.eml"), "wb") as f:
+        f.write(phish)
+    with open(os.path.join(BASE, "correo", "referencia_Factura_ARD-2026-0884.eml"), "wb") as f:
+        f.write(legit)
+    files, order = kape_package(sim)
+    stamp = ft2dt(TRIAGE_START).strftime("%Y-%m-%dT%H%M%S")
+    csv = ["CopiedTimestamp,SourceFile,DestinationFile,FileSize,SourceFileSha1,DeferredCopy,CreatedOnUtc,ModifiedOnUtc,LastAccessedOnUtc,CopyDuration"]
+    defer_lines, copy_lines = [], []
+    fmt = lambda ft: ft2dt(ft).strftime("%Y-%m-%d %H:%M:%S.") + f"{ft % TICKS:07d}"
+    for p, (d, c, m, ct, deferred) in order:
+        dest = TDEST + "\\C" + p[2:]
+        sha1 = hashlib.sha1(d).hexdigest().upper()
+        csv.append(f'{fmt(ct)},{p},{dest},{len(d)},{sha1},{deferred},{fmt(c)},{fmt(m)},{fmt(ct)},{"00:00:00." + str(int(len(d) / 9e5 * 1e7 + 12000)).zfill(7)}')
+        if deferred:
+            defer_lines.append(f"Deferring '{p}' due to IOException...")
+            copy_lines.append(f"Copied deferred file '{p}' to '{dest}'. Hashing source file...")
+    console = "\r\n".join([
+        "KAPE version 1.3.0.2, Author: Eric Zimmerman, Contact: https://www.kroll.com/kape (kape@kroll.com)", "",
+        r"KAPE directory: E:\KAPE",
+        r"Command line:   --tsource C: --tdest E:\triage\KB-FIN-WS03 --target KB-Triage", "",
+        "System info: Machine name: KB-FIN-WS03, 64-bit: True, User: adm.jtorres OS: Windows10 (10.0.26100)", "",
+        "Using Target operations",
+        r"Creating target destination directory 'E:\triage\KB-FIN-WS03'",
+        "Found 1 targets. Expanding targets to file list...",
+        r"Target 'KB-Triage' with Id '3f1c9e2a-7b5d-4a8e-9c1f-2d6e8b4a7c03' found in 'E:\KAPE\Targets\!Local\KB-Triage.tkape'",
+        f"Found {len(order)} files in 1.802 seconds. Beginning copy..."]
+        + ["  " + x for x in defer_lines]
+        + [f"Deferred file count: {len(defer_lines)}. Copying locked files..."]
+        + ["  " + x for x in copy_lines]
+        + [f"Copied {len(order)} (Deduplicated: 0 (0 B)) out of {len(order)} files in {(KAPE_END - TRIAGE_START) / TICKS:.4f} seconds. "
+           "See '*_CopyLog.csv' in the VHDX, VHD, Zip, or target destination directory for complete copy details", "",
+           f"Total execution time: {(KAPE_END - TRIAGE_START) / TICKS + 0.31:.4f} seconds", ""])
+    extra = [(f"{stamp}_ConsoleLog.txt", console.encode("utf-8"), TRIAGE_START, KAPE_END),
+             (f"{stamp}_CopyLog.csv", ("\r\n".join(csv) + "\r\n").encode("utf-8"), KAPE_END, KAPE_END + sec(0.2))]
+    # ZIP como lo haría 7-Zip: directorios primero, marcas NTFS en el campo extra
+    entries = {}
+    for p, (d, c, m, ct, _) in order:
+        rel = "KB-FIN-WS03/C" + p[2:].replace("\\", "/")
+        entries[rel] = (d, c, m, ct)
+        parts = rel.split("/")
+        for i in range(1, len(parts)):
+            dpath = "/".join(parts[:i]) + "/"
+            prev = entries.get(dpath)
+            entries[dpath] = (None, TRIAGE_START + sec(1.9), max(ct, prev[2]) if prev else ct, KAPE_END)
+    for name, data, c, m in extra:
+        entries["KB-FIN-WS03/" + name] = (data, c, m, m)
+    zpath = os.path.join(BASE, "triage", "KB-FIN-WS03_triage.zip")
+    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        for rel in sorted(entries, key=str.lower):
+            d, c, m, a = entries[rel]
+            dt_local = ft2dt(m + (sec(7200) if is_dst(m) else sec(3600)))
+            zi = zipfile.ZipInfo(rel, date_time=dt_local.timetuple()[:6])
+            zi.create_system = 0
+            zi.extra = ntfs_extra(m, a, c)
+            if d is None:
+                zi.external_attr = 0x10
+                z.writestr(zi, b"")
+            else:
+                zi.external_attr = 0x20
+                zi.compress_type = zipfile.ZIP_DEFLATED
+                z.writestr(zi, d)
+    return phish, legit, zbytes, lnk, zpath
+
+
+def main():
+    sim = simulate()
+    phish, legit, zbytes, lnk, zpath = write_outputs(sim)
+    md5, sha256, imp, sha1 = hashes(IMPLANT)
+    print("Escenario 03 generado")
+    for ch, (n, first, last, size) in sim.evtx_info.items():
+        print(f"  {EVTX_FILES[ch][0]:<55} {n:>6} eventos  RID {first}-{last}  {size / 1048576:.1f} MiB")
+    print(f"  ZIP adjunto      SHA-256 {hashlib.sha256(zbytes).hexdigest()}")
+    print(f"  LNK adjunto      SHA-256 {hashlib.sha256(lnk).hexdigest()}")
+    print(f"  Implante         SHA-256 {sha256}  SHA-1 {sha1}")
+    print(f"  Triage           {os.path.relpath(zpath, BASE)}  {os.path.getsize(zpath) / 1048576:.1f} MiB")
+
+
+if __name__ == "__main__":
+    main()
