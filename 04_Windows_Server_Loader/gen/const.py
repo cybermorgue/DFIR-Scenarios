@@ -156,3 +156,14 @@ def hashes(path):
     seed = path.lower().encode()
     return (hashlib.md5(seed + b"md5").hexdigest().upper(), hashlib.sha256(seed + b"sha").hexdigest().upper(),
             hashlib.md5(seed + b"imp").hexdigest().upper(), hashlib.sha1(seed + b"sha1").hexdigest())
+
+for _p, _d, _o, _prod, _comp, _v in [
+    (r"C:\Windows\System32\Robocopy.exe", "Microsoft Robocopy", "robocopy.exe", WINP, MS, WV),
+    (r"C:\Program Files\VMware\VMware Tools\vmtoolsd.exe", "VMware Tools Core Service", "vmtoolsd.exe",
+     "VMware Tools", "VMware, Inc.", "12.3.5.46049"),
+]:
+    _img(_p, _d, _o, _prod, _comp, _v)
+
+NAS_IP = "10.20.30.40"
+MS_UPDATE_IP = "203.0.113.10"       # CDN de firmas de Defender (IP de documentación)
+HOLIDAYS = {(10, 12)}               # Fiesta Nacional de España

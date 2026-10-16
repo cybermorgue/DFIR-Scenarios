@@ -78,3 +78,18 @@ def test_http_log():
     sim = nuevo()
     sim.http(T(4, 19, 18, 30.5), "/client64.exe", "curl/7.55.1")
     assert sim.http_log == [(T(4, 19, 18, 30.5), "192.0.2.25", "/client64.exe", "curl/7.55.1")]
+
+
+def test_ventanas_de_registro_por_arranque():
+    sim = Sim()
+    sim.boot(T(1, 6, 0, 0.0))
+    mc1 = sim.procs["mcservice"]
+    sim.shutdown(T(13, 8, 31, 0.0), "system", "Otro (planeado)")
+    sim.boot(T(13, 8, 33, 0.0))
+    # un evento emitido después de construir los dos arranques, con fecha del primero, se registra
+    p = sim.spawn(T(4, 18, 52, 48.0), CMD, "cmd.exe /c whoami", sim.procs_at(T(4, 18, 52, 48.0))["mcservice"], "system")
+    assert sim.procs_at(T(4, 18, 52, 48.0))["mcservice"] is mc1 and sim.procs["mcservice"] is not mc1
+    assert [e for e in sim.ev["Sysmon"] if e.eid == 1 and f(e)["ProcessId"] == p.pid]
+    # en el hueco del reinicio no se registra nada
+    q = sim.spawn(T(13, 8, 32, 0.0), CMD, "cmd.exe", mc1, "system")
+    assert not [e for e in sim.ev["Sysmon"] if e.eid == 1 and f(e)["ProcessId"] == q.pid]

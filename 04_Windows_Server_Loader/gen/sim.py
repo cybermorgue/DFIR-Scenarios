@@ -70,8 +70,7 @@ class Sim:
         self.procs = {}              # nombre lógico -> Proc del arranque actual
         self.logons = {}             # clave de usuario -> (id, guid)
         self.boot_t = None
-        self.sysmon_from = None
-        self.audit_from = None
+        self.boots = []              # [{"t", "sysmon", "audit", "end", "procs", "sysmon_pid", "lsass_pid"}]
         self.sysmon_pid = 0
         self.lsass_pid = 0
         self.running = []            # procesos vivos (para cerrarlos en el apagado)
@@ -120,19 +119,32 @@ class Sim:
         ev.channel = CHANNEL_NAME[ch]
         self.ev[ch].append(ev)
 
+    def boot_at(self, t):
+        """Arranque que cubre el instante t (None si el equipo estaba apagado)."""
+        for b in reversed(self.boots):
+            if b["t"] <= t and (b["end"] is None or t < b["end"]):
+                return b
+        return None
+
+    def procs_at(self, t):
+        b = self.boot_at(t)
+        return b["procs"] if b else {}
+
     def sysmon(self, t, eid, ver, fields):
-        if self.sysmon_from is None or t < self.sysmon_from:
+        b = self.boot_at(t)
+        if b is None or t < b["sysmon"]:
             return
         self.add("Sysmon", Event(t, "Microsoft-Windows-Sysmon", eid, fields, guid=SYSMON_GUID, ver=ver,
-                                 task=eid, pid=self.sysmon_pid, tid=self.rng.choice((2884, 3012, 3460, 4216)),
+                                 task=eid, pid=b["sysmon_pid"], tid=self.rng.choice((2884, 3012, 3460, 4216)),
                                  user="S-1-5-18"))
 
     def sec(self, t, eid, task, fields, ver=0, pid=None, kw=0x8020000000000000):
-        if self.audit_from is None or t < self.audit_from:
+        b = self.boot_at(t)
+        if b is None or t < b["audit"]:
             return
         self.add("Security", Event(t, "Microsoft-Windows-Security-Auditing", eid, fields, guid=SEC_GUID,
                                    ver=ver, level=0, task=task, kw=kw,
-                                   pid=self.lsass_pid if pid is None else pid, tid=self.tid()))
+                                   pid=b["lsass_pid"] if pid is None else pid, tid=self.tid()))
 
     def sys(self, t, provider, eid, fields, ch="System", guid=None, esn=None, qual=None, ver=0, level=4,
             task=0, opcode=0, kw=0x8000000000000000, pid=None, user=None, activity=None):
@@ -147,8 +159,9 @@ class Sim:
         self.boot_t = t
         self.procs = {}
         self.running = []
-        self.audit_from = t + sec(4.2)
-        self.sysmon_from = t + sec(6.8)
+        b = {"t": t, "audit": t + sec(4.2), "sysmon": t + sec(6.8), "end": None, "procs": self.procs,
+             "sysmon_pid": 0, "lsass_pid": 0}
+        self.boots.append(b)
         self.logons = {}
         self.sys(t + sec(0.5), "Microsoft-Windows-Kernel-General", 12, [
             ("MajorVersion", S.U32, 10), ("MinorVersion", S.U32, 0), ("BuildVersion", S.U32, 17763),
@@ -158,12 +171,13 @@ class Sim:
         base = [("smss", r"C:\Windows\System32\smss.exe", r"\SystemRoot\System32\smss.exe", None, 0.9),
                 ("csrss", r"C:\Windows\System32\csrss.exe", r"%SystemRoot%\system32\csrss.exe ObjectDirectory=\Windows", "smss", 1.6),
                 ("wininit", r"C:\Windows\System32\wininit.exe", "wininit.exe", "smss", 1.7),
+                ("winlogon", r"C:\Windows\System32\winlogon.exe", "winlogon.exe", "smss", 1.8),
                 ("services", r"C:\Windows\System32\services.exe", r"C:\Windows\system32\services.exe", "wininit", 2.1),
                 ("lsass", r"C:\Windows\System32\lsass.exe", r"C:\Windows\system32\lsass.exe", "wininit", 2.2)]
         for key, img, cmd, par, dt in base:
             self.spawn(t + sec(dt), img, cmd, self.procs.get(par), "system", key=key, log=False)
-        self.lsass_pid = self.procs["lsass"].pid
-        self.sec(self.audit_from, 4608, 12288, [], pid=self.lsass_pid)
+        self.lsass_pid = b["lsass_pid"] = self.procs["lsass"].pid
+        self.sec(b["audit"], 4608, 12288, [], pid=self.lsass_pid)
         self.sys(t + sec(5.0), "EventLog", 6009, [(None, S.STR, "10.00."), (None, S.STR, "17763"),
                                                   (None, S.STR, "Multiprocessor Free"), (None, S.STR, "0")],
                  esn="EventLog", qual=0x8000, pid=0)
@@ -171,7 +185,7 @@ class Sim:
         svc = self.procs["services"]
         sm = self.spawn(t + sec(6.5), r"C:\Windows\Sysmon64.exe", r"C:\Windows\Sysmon64.exe", svc, "system",
                         key="sysmon", log=False)
-        self.sysmon_pid = sm.pid
+        self.sysmon_pid = b["sysmon_pid"] = sm.pid
         for key, cmd, ukey, dt in [("svc_dcom", "-k DcomLaunch -p", "system", 7.1),
                                    ("svc_rpcss", "-k RPCSS -p", "network", 7.3),
                                    ("svc_eventlog", "-k LocalServiceNetworkRestricted -p -s EventLog", "local", 7.6),
@@ -195,18 +209,20 @@ class Sim:
                      kw=0x8080000000000000, pid=svc.pid)
         return mc
 
-    def shutdown(self, t, ukey, reason, comment=""):
-        """Reinicio ordenado con shutdown.exe: 1074 con el usuario y el motivo, 6006 y fin de registro."""
+    def shutdown(self, t, ukey, reason, comment="", process=r"C:\Windows\system32\shutdown.exe"):
+        """Reinicio ordenado: 1074 con el proceso, el usuario y el motivo, 6006 y fin de registro."""
         sid, name, dom, _ = USERS[ukey]
         self.sys(t, "User32", 1074, [
-            ("param1", S.STR, r"C:\Windows\system32\shutdown.exe (INT01)"), ("param2", S.STR, HOST),
+            ("param1", S.STR, f"{process} ({HOST})"), ("param2", S.STR, HOST),
             ("param3", S.STR, reason), ("param4", S.STR, "0x80040001"), ("param5", S.STR, "Reiniciar"),
             ("param6", S.STR, comment), ("param7", S.STR, f"{dom}\\{name}")],
             guid=GUIDS["User32"], esn="User32", qual=0x8000, kw=0x8080000000000000, user=sid)
         self.sys(t + sec(21.0), "EventLog", 6006, [], esn="EventLog", qual=0x8000, pid=0)
         self.shutdowns.append((t, ukey, reason))
-        self.sysmon_from = None
-        self.audit_from = None
+        self.boot_at(t)["end"] = t + sec(22.0)
+        for p in self.running:
+            if p.end is None:
+                p.end = t + sec(21.5)      # mueren con el apagado; Sysmon ya no registra su 5
         self.running = []
 
     # --------------------------------------------------------------- procesos
@@ -268,9 +284,10 @@ class Sim:
             ("MandatoryLabel", S.SID, INTEGRITY_SID.get(p.integrity, "S-1-16-16384"))], ver=2, pid=4)
 
     def exit(self, p, t):
-        if p not in self.running:
+        if p.end is not None:
             return
-        self.running.remove(p)
+        if p in self.running:
+            self.running.remove(p)
         p.end = t
         self.sysmon(t, 5, 3, [("RuleName", S.STR, "-"), ("UtcTime", S.STR, iso(t, 3)),
                               ("ProcessGuid", S.GUID, p.guid), ("ProcessId", S.U32, p.pid),
