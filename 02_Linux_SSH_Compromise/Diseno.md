@@ -2,7 +2,7 @@
 tags:
   - DFIR/Simulacion
   - DFIR/Linux
-estado: fase 2 (generador listo)
+estado: fase 3 (validado en frío)
 ---
 
 # Diseño — Escenario 02: compromiso de `db01` por SSH
@@ -22,7 +22,7 @@ El caso se resuelve solo con sus evidencias. La relación con el 01 es una pregu
 | `db01.kelbrook.internal` | `10.20.30.20` | Ubuntu 22.04.5, MariaDB 10.6, OpenSSH 8.9p1. Víctima. Zona horaria UTC |
 | `web01` | `10.20.30.10` | Portal web. Cliente MySQL constante contra `db01` (ruido) |
 | `nas01` | `10.20.30.40` | NAS de copias. Recibe el backup nocturno por rsync/SSH (ruido) |
-| `ws-it-02` | `10.20.30.55` | Puesto Windows de la DBA. PuTTY 0.76 con clave ed25519 (ruido) |
+| `ws-it-02` | `10.20.30.55` | Puesto Windows de la DBA. PuTTY 0.76 con clave ed25519, puertos origen 49152-65535 (ruido) |
 | `dns01` | `10.20.30.2` | Resolvedor interno |
 | `fw01` | `10.20.30.1` | Cortafuegos/puerta de enlace. NAT `2222 → 10.20.30.20:22` |
 | Atacante | `198.51.100.212` | VPS distinto al del escenario 01 (`198.51.100.37`). Cliente `OpenSSH_8.4p1 Debian-5+deb11u3`. Sirve HTTP en `8080` (`BaseHTTP/0.6 Python/3.11.2`) |
@@ -60,7 +60,7 @@ Todas las horas en UTC. Ventana de la captura: **2026-09-29 22:00 → 2026-09-30
 | 22:00 – 03:00 | Consultas DNS de `db01` a `dns01` (NTP, apt, `nas01`) y NTP a `203.0.113.5` | PCAP |
 | 22:03:10 – 22:17:48 | `mvega` entra por SSH con clave desde `ws-it-02`, revisa MariaDB y el disco, usa `sudo mysql` con contraseña, sale | `auth.log` (publickey y `sudo`), `wtmp`, `.bash_history` de `mvega`, PCAP |
 | 23:00:01 – 23:03:29 | Cron de `backup`: `mysqldump`, consulta DNS de `nas01.kelbrook.internal` y `rsync` por SSH a `nas01`. Termina con `logger -t db-backup` | `syslog.1` (CRON y `db-backup`), `auth.log` (sesión de cron), PCAP (SSH saliente a `10.20.30.40:22`, 2,4 MB) |
-| 23:41:07 – 00:36:05 | Escáner `203.0.113.77`: 190 intentos, uno por conexión, contra `root`, `admin`, `ubuntu`, `test`, `oracle`, `pi`... Cadencia de 15 a 20 s, banner `libssh2_1.10.0`, se despide con `Bye Bye` | `auth.log`, `btmp`, PCAP |
+| 23:41:10 – 00:36:22 | Escáner `203.0.113.77`: 192 intentos, uno por conexión, contra `root`, `admin`, `ubuntu`, `test`, `oracle`, `pi`... Cadencia de 15 a 20 s, banner `libssh2_1.10.0`, se despide con `Bye Bye` | `auth.log`, `btmp`, PCAP |
 | Todo el periodo | Fondo de escaneo de otras IPs desde el 1 de septiembre, entre 2 y 14 intentos por ráfaga | `btmp` (todo el mes), `auth.log` (desde el 27) |
 
 ### Intrusión
@@ -155,7 +155,7 @@ Se copian a `Escenario.md`. Respuesta esperada entre paréntesis, solo aquí.
 
 1. ¿Qué usuario, desde qué IP y a qué hora consiguió el atacante su primer acceso interactivo a `db01`? (`portal_app`, `198.51.100.212`, 01:03:05)
 2. Antes de entrar, probó otros cuatro nombres de usuario. ¿Cuáles, y cuáles de ellos no existían en `db01`? (`root`, `nhollis`, `deploy`, `admin`; no existen `nhollis`, `deploy` ni `admin`)
-3. Otra IP acumula muchos más fallos de autenticación. ¿Cuál es, cuántos intentos hizo y por qué no es el atacante? (`203.0.113.77`, 190, nunca entra, usuarios genéricos, cadencia automática, cliente `libssh2`)
+3. Otra IP acumula muchos más fallos de autenticación. ¿Cuál es, cuántos intentos hizo y por qué no es el atacante? (`203.0.113.77`, 192, nunca entra, usuarios genéricos, cadencia automática, cliente `libssh2`)
 4. ¿Qué relación tiene este acceso con el incidente del 23 de septiembre en `web01`? (credencial `Kb!portal#2024` reutilizada en la cuenta de sistema `portal_app`; `nhollis` y `deploy` salen del `/etc/passwd` de `web01`)
 5. ¿Cómo pasó el atacante de `portal_app` a `root`? Cita la línea de `auth.log` y el otro artefacto que muestra cómo obtuvo la shell. (`sudo ... COMMAND=/usr/bin/vim /etc/mysql/mariadb.conf.d/50-server.cnf` a las 01:10:18; `:!/bin/bash` en `/root/.viminfo`)
 6. ¿Qué configuración lo hizo posible y en qué fichero está? (`/etc/sudoers.d/portal_app`, vim sin contraseña como root sobre esa ruta)
@@ -170,6 +170,11 @@ Se copian a `Escenario.md`. Respuesta esperada entre paréntesis, solo aquí.
 15. ¿Cuánto duró la sesión inicial, cuándo volvió y con qué método se autenticó la segunda vez? (23 min 58 s; 02:05:17, `publickey` como `root`)
 16. En la captura hay una transferencia SSH saliente de `db01` mucho mayor que la exfiltración. ¿Qué es y cómo se descarta? (backup por rsync a `nas01` a las 23:03, lanzado por `/etc/cron.d/db-backup`, con el `logger` de `db-backup` en `syslog.1`)
 
+Extra (difícil):
+
+17. ¿Qué contraseña asignó el atacante a `support`? (`Soporte2026!`; yescrypt de `/etc/shadow` con John `--format=crypt` y una lista corta)
+18. Sin descifrar nada, ¿cómo separas en la captura al atacante, al escáner y a la DBA? (banner y HASSH: atacante `OpenSSH_8.4p1 Debian-5+deb11u3` / `c11b200866cf918393e62ea25d851d90`; escáner `libssh2_1.10.0` / `b4b8ae3d7241d2c1dc54b4df7e8c19d1`; DBA `PuTTY_Release_0.76` / `59e381f5af200c31d0b53cf5f2ea6518`. Además la duración, el volumen y el ritmo de cada conexión)
+
 Entregable sugerido: línea temporal, IOCs (IP, huella de la clave, ruta del cron, cuenta `support`, staging), lista de persistencias a eliminar y tres recomendaciones.
 
 ## Decisiones tomadas en la fase 2
@@ -180,3 +185,30 @@ Entregable sugerido: línea temporal, IOCs (IP, huella de la clave, ruta del cro
 - **Exfiltración en claro.** Deliberado para que el `.tgz` sea recuperable. Un escenario posterior puede hacerla por TLS.
 - **Tamaño.** El backup se simula con 2,4 MB de carga cifrada; la captura queda en 4,6 MB y el triage en 50 KB.
 - **Pistas.** Las preguntas 2 y 16 conservan las pistas; se revisan en la fase 3.
+
+## Resultado de la fase 3
+
+Resolución en frío solo con las evidencias y herramientas estándar (`grep`, `last`, `lastb`, `utmpdump`, `lastlog -R`, `tshark`, `tar`, `sha256sum`). Las 16 preguntas tienen respuesta única y cada una se demuestra con al menos dos fuentes.
+
+| Pregunta | Fuente principal | Corroboración |
+| --- | --- | --- |
+| 1, 2, 15 | `auth.log` | `wtmp`, `btmp`, `lastlog`, PCAP (puertos origen) |
+| 3 | `auth.log` | `btmp` (192 en ambos), PCAP (HASSH de libssh2) |
+| 4 | `etc/shadow` (el hash de `portal_app` verifica con `Kb!portal#2024`) | usuarios del `/etc/passwd` de `web01` en `btmp` |
+| 5, 6 | `auth.log` (`COMMAND=/usr/bin/vim`) | `/root/.viminfo`, `sudoers.d/portal_app` |
+| 7, 8, 9, 13 | `/root/.bash_history` | `auth.log`, ficheros y sus mtimes, `live/stat.txt` |
+| 10 | `syslog` (43 ejecuciones) | PCAP (10 `GET /c/db01`) |
+| 11, 12 | PCAP (`POST /up`) | `/root/.bash_history` |
+| 14 | `home/portal_app/.bash_history` | `auth.log`, `wtmp` |
+| 16 | PCAP (2,4 MB a `nas01`) | `cron.d/db-backup`, `syslog.1` |
+
+Correcciones aplicadas al generador tras la validación:
+
+- **Directorios del tar.** Iban todos al principio y GNU tar no restauraba su mtime al extraer. Ahora cada directorio precede a su contenido, se incluyen los intermedios y llevan fechas coherentes (`/etc` 01:15:19, `/root` 01:26:19, `/var/log` en la rotación).
+- **Rotación de `syslog`.** Los ficheros se cortan en el HUP de rsyslog, como en un sistema real.
+- **Puertos de PuTTY.** Rango de Windows y crecientes en el tiempo; coinciden con `auth.log` y con `live/ss-tanp.txt`.
+- **Distractor no diseñado.** El escáner probaba `support1`, demasiado parecido a la cuenta del atacante; ahora prueba `debian`.
+
+Dificultad: se mantiene en Media. El historial de root lo da casi todo, como pasa a menudo en la realidad. La dificultad está en las correlaciones: el `.viminfo`, el `exit` suelto, la trampa de sysstat, recortar el multipart y verificar el hash. Se conservan las pistas de las preguntas 2 y 16 y se añaden dos preguntas extra de nivel Difícil.
+
+Pendiente para la fase 4: este documento contiene las respuestas y vive junto al brief. Al escribir `Solucion.md` conviene integrarlo allí o moverlo fuera de la carpeta del escenario.

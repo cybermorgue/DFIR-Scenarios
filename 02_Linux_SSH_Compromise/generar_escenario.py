@@ -446,9 +446,14 @@ _eph = {}
 def eph(host, t):
     """Puerto efímero de Linux (32768-60999) que crece con el tiempo, sin repeticiones,
     aunque las conexiones se generen fuera de orden."""
-    used = _eph.setdefault(host, (random.Random(host).randint(33000, 40000), set()))
-    port = used[0] + int((t - T(29, 22, 0)) * 0.9) + random.randint(0, 3)
-    port = 32768 + (port - 32768) % 28232
+    if host == WS:
+        used = _eph.setdefault(host, (50210, set()))
+        port = used[0] + int((t - T(28, 0, 0)) * 0.004) + random.randint(0, 2)
+    else:
+        used = _eph.setdefault(host, (random.Random(host).randint(33000, 40000), set()))
+        port = used[0] + int((t - T(29, 22, 0)) * 0.9) + random.randint(0, 3)
+    lo, span = (49152, 16383) if host == WS else (32768, 28232)
+    port = lo + (port - lo) % span
     while port in used[1]: port += 1
     used[1].add(port)
     return port
@@ -1110,7 +1115,9 @@ def background_cron():
         t += 60
     sysl(T(30, 1, 18, 1.24), f"cron[{CRON_PID}]", "(*system*mariadb-health) RELOAD (/etc/cron.d/mariadb-health)")
 
+HUP = {}
 def logrotate(t):
+    HUP[dt(t).day] = t + 0.4
     for k, m in enumerate(["Starting Rotate log files...", "Starting Daily man-db regeneration..."]):
         sysl(t + k * 0.01, "systemd[1]", m)
     sysl(t + 0.4, f"rsyslogd[{RSYSLOG_PID}]", '[origin software="rsyslogd" swVersion="8.2112.0" x-pid="804" x-info="https://www.rsyslog.com"] rsyslogd was HUPed')
@@ -1194,7 +1201,7 @@ def network_noise():
         ntp_poll(t); t += 2048 + random.uniform(-0.4, 0.4)
 
 # ======================================================================= 5. escáneres de fondo
-SCAN_USERS = ["root", "root", "root", "admin", "ubuntu", "test", "user", "oracle", "postgres", "pi", "git", "ftpuser", "guest", "mysql", "support1"]
+SCAN_USERS = ["root", "root", "root", "admin", "ubuntu", "test", "user", "oracle", "postgres", "pi", "git", "ftpuser", "guest", "mysql", "debian"]
 EXISTING = {"root", "mysql", "kbadmin", "mvega", "portal_app", "jnavarro", "backup"}
 SCAN_COUNT = {}
 
@@ -1235,7 +1242,7 @@ def background_scanners():
 # ======================================================================= 6. sesiones legítimas
 def ws_session(t_open, t_out, sid, cmds, sudo_cmd=None):
     """Sesión de mvega desde ws-it-02 con PuTTY. cmds: (t_enter, texto, bytes_salida)."""
-    port = random.randint(50000, 50999)
+    port = eph(WS, t_open)
     x = Ssh(WS, port, DB, 22, "putty")
     tt = x.handshake(t_open, "mvega")
     tt = x.publickey(tt + 0.05, "mvega")
@@ -1261,7 +1268,7 @@ def legit_logins():
         (T(29, 9, 4, 15.8), T(29, 9, 51, 30.1), 310, ["uptime", "sudo mysql -e \"SHOW ENGINE INNODB STATUS\\G\" | head -40", "df -h /var/lib/mysql"]),
         (T(29, 15, 31, 2.6), T(29, 15, 36, 44.9), 311, ["ls -lh /var/backups/mariadb/", "free -m"]),
     ]:
-        port = random.randint(50000, 50999)
+        port = eph(WS, t0)
         ssh_login(t0, t1, "mvega", WS, port, "publickey", sid, fp=fingerprint(KEY_MVEGA))
         tc = t0 + 20
         for c in cmds:
@@ -1280,7 +1287,8 @@ def legit_logins():
         (T(29, 22, 16, 50.6), "uptime", 70),
     ], sudo_cmd="/usr/bin/mysql -e SHOW PROCESSLIST")
     # Mañana del 30: la DBA entra, ve el cron y lanza la recogida (sesión abierta en el triage)
-    LIVE["sshd_pid"] = ssh_login(T(30, 8, 4, 37.3), None, "mvega", WS, 50877, "publickey", 315, fp=fingerprint(KEY_MVEGA))
+    LIVE["ws_port"] = eph(WS, T(30, 8, 4, 36.9))
+    LIVE["sshd_pid"] = ssh_login(T(30, 8, 4, 37.3), None, "mvega", WS, LIVE["ws_port"], "publickey", 315, fp=fingerprint(KEY_MVEGA))
     sudo(T(30, 8, 27, 50.6), "mvega", "/home/mvega", "/bin/bash /tmp/ir-collect.sh")
 
 # ======================================================================= 7. intrusión
@@ -1626,7 +1634,7 @@ mvega     {sp + 84:>6}  0.0  0.0 169732  3644 ?        S    08:04   0:00  \\_ (s
 LISTEN 0      4096      127.0.0.53%lo:53             0.0.0.0:*     users:(("systemd-resolve",pid=731,fd=14))
 LISTEN 0      128             0.0.0.0:22             0.0.0.0:*     users:(("sshd",pid=1021,fd=3))
 LISTEN 0      80          10.20.30.20:3306           0.0.0.0:*     users:(("mariadbd",pid=1187,fd=21))
-ESTAB  0      0           10.20.30.20:22         10.20.30.55:50877 users:(("sshd",pid={sp + 98},fd=4),("sshd",pid={sp},fd=4))
+ESTAB  0      0           10.20.30.20:22         10.20.30.55:{LIVE['ws_port']} users:(("sshd",pid={sp + 98},fd=4),("sshd",pid={sp},fd=4))
 ESTAB  0      0           10.20.30.20:3306       10.20.30.10:47316 users:(("mariadbd",pid=1187,fd=34))
 LISTEN 0      128                [::]:22                [::]:*     users:(("sshd",pid=1021,fd=4))
 """
@@ -1643,8 +1651,8 @@ def triage(sql_mtime):
     old = lambda y, mo, d, h=10, mi=0: datetime(y, mo, d, h, mi, tzinfo=timezone.utc).timestamp()
     auth_txt = unpid("\n".join(l for t, l in sorted(AUTH, key=lambda e: e[0]) if T(27, 0, 0) <= t <= TRIAGE_T - 5) + "\n")
     sys_sorted = [(t, unpid(l)) for t, l in sorted(SYSLOG, key=lambda e: e[0])]
-    syslog1 = "\n".join(l for t, l in sys_sorted if T(29, 0, 0) <= t < T(30, 0, 0)) + "\n"
-    syslog0 = "\n".join(l for t, l in sys_sorted if T(30, 0, 0) <= t <= TRIAGE_T - 5) + "\n"
+    syslog1 = "\n".join(l for t, l in sys_sorted if HUP[29] <= t < HUP[30]) + "\n"
+    syslog0 = "\n".join(l for t, l in sys_sorted if HUP[30] <= t <= TRIAGE_T - 5) + "\n"
     wtmp = b"".join(utmp_pack(*r) for t, r in sorted(WTMP, key=lambda e: e[0]))
     btmp = b"".join(utmp_pack(*r) for t, r in sorted(BTMP, key=lambda e: e[0]))
     last_auth = max(t for t, _ in AUTH if t <= TRIAGE_T - 5)
@@ -1689,7 +1697,7 @@ def triage(sql_mtime):
         "home/portal_app/.bash_history": (bash_history(HIST["portal_app"]), hist_mtime["portal_app"], 0o600, 1002, 1002, "portal_app", "portal_app"),
         "home/jnavarro/.bash_history": (bash_history(HIST["jnavarro"]), hist_mtime["jnavarro"], 0o600, 1003, 1003, "jnavarro", "jnavarro"),
         "var/log/auth.log": (auth_txt.encode(), last_auth, 0o640, 107, 4, "syslog", "adm"),
-        "var/log/syslog.1": (syslog1.encode(), T(29, 23, 59, 1.6), 0o640, 107, 4, "syslog", "adm"),
+        "var/log/syslog.1": (syslog1.encode(), max(t for t, _ in SYSLOG if t < HUP[30]), 0o640, 107, 4, "syslog", "adm"),
         "var/log/syslog": (syslog0.encode(), last_sys, 0o640, 107, 4, "syslog", "adm"),
         "var/log/wtmp": (wtmp, T(30, 8, 4, 37.3), 0o664, 0, 43, "root", "utmp"),
         "var/log/btmp": (btmp, max(t for t, _ in BTMP), 0o660, 0, 43, "root", "utmp"),
@@ -1699,8 +1707,24 @@ def triage(sql_mtime):
         F[f"home/support/{name}"] = (skel[name].encode(), SKEL_MTIME, 0o644, 1004, 1004, "support", "support")
     LIVE["sudo_pid"] = 81712
     live = live_outputs({k: (v[0], v[1]) for k, v in F.items()})
-    dirs = {"etc/cron.d": T(30, 1, 17, 40.1), "etc/sudoers.d": old(2026, 8, 12, 9, 41) + 7.4, "root/.ssh": T(30, 1, 16, 20.0),
-            "home/support": T(30, 1, 15, 2.1), "home": T(30, 1, 15, 2.1), "var/tmp": T(30, 1, 25, 30.2), "var/spool/cron/crontabs": inst}
+    # Directorios: los que guardan rastro de la intrusión y los intermedios, con su mtime y modo
+    D = {"": (TRIAGE_T, 0o755), "etc": (FILE_TIMES["shadow"] + 0.01, 0o755), "etc/cron.d": (T(30, 1, 17, 40.1), 0o755),
+         "etc/sudoers.d": (old(2026, 8, 12, 9, 41) + 7.4, 0o750), "etc/ssh": (old(2025, 8, 12, 9, 19) + 48, 0o755),
+         "etc/mysql": (inst, 0o755), "etc/mysql/mariadb.conf.d": (inst + 3300, 0o755),
+         "root": (VIMINFO["quit"] + 0.05, 0o700), "root/.ssh": (T(30, 1, 16, 20.0), 0o700), "home": (T(30, 1, 15, 2.1), 0o755),
+         "home/mvega": (old(2025, 8, 6, 10, 48), 0o750), "home/mvega/.ssh": (old(2025, 8, 6, 10, 48), 0o700),
+         "home/portal_app": (old(2025, 8, 12, 9, 31), 0o750), "home/jnavarro": (old(2026, 6, 27, 12, 31), 0o750),
+         "home/support": (T(30, 1, 15, 2.1), 0o750), "usr": (inst, 0o755), "usr/local": (inst, 0o755), "usr/local/bin": (old(2025, 8, 14, 16, 9) + 12, 0o755),
+         "var": (inst, 0o755), "var/log": (HUP[30], 0o775), "var/tmp": (T(30, 1, 25, 30.2), 0o1777),
+         "var/spool": (inst, 0o755), "var/spool/cron": (inst, 0o755), "var/spool/cron/crontabs": (inst, 0o1730)}
+    OWN = {"home/mvega": (1001, 1001, "mvega", "mvega"), "home/mvega/.ssh": (1001, 1001, "mvega", "mvega"),
+           "home/portal_app": (1002, 1002, "portal_app", "portal_app"), "home/jnavarro": (1003, 1003, "jnavarro", "jnavarro"),
+           "home/support": (1004, 1004, "support", "support"), "var/log": (0, 107, "root", "syslog"),
+           "var/spool/cron/crontabs": (0, 112, "root", "crontab")}
+    for name in F:
+        parts = name.split("/")[:-1]
+        for i in range(1, len(parts) + 1):
+            assert "/".join(parts[:i]) in D, name
     prefix = "db01-triage-2026-09-30/"
     manifest = []
     out = io.BytesIO()
@@ -1715,13 +1739,18 @@ def triage(sql_mtime):
                 ti.size = len(data)
                 tf.addfile(ti, io.BytesIO(data))
                 manifest.append(f"{hashlib.sha256(data).hexdigest()}  {name}")
-        for d_, m in sorted(dirs.items()):
-            mode = {"var/tmp": 0o1777, "root/.ssh": 0o700, "home/support": 0o750, "etc/sudoers.d": 0o750, "var/spool/cron/crontabs": 0o1730}.get(d_, 0o755)
-            uid_, gid_, un, gn = (1004, 1004, "support", "support") if d_ == "home/support" else (0, 112 if "crontabs" in d_ else 0, "root", "crontab" if "crontabs" in d_ else "root")
-            add("fs/" + d_, None, m, mode, uid_, gid_, un, gn, isdir=True)
-        for name in sorted(F):
-            data, mtime, mode, uid_, gid_, un, gn = F[name]
-            add("fs/" + name, data, mtime, mode, uid_, gid_, un, gn)
+        # Orden de GNU tar: cada directorio justo antes de su contenido
+        entries = [("fs/" + d + "/" if d else "fs/", d, True) for d in D] + [("fs/" + n, n, False) for n in F]
+        add("", None, TRIAGE_T + 30, 0o755, 0, 0, "root", "root", isdir=True)
+        for _, key, isdir in sorted(entries):
+            if isdir:
+                m, mode = D[key]
+                uid_, gid_, un, gn = OWN.get(key, (0, 0, "root", "root"))
+                add("fs/" + key if key else "fs", None, m, mode, uid_, gid_, un, gn, isdir=True)
+            else:
+                data, mtime, mode, uid_, gid_, un, gn = F[key]
+                add("fs/" + key, data, mtime, mode, uid_, gid_, un, gn)
+        add("live", None, TRIAGE_T + 4, 0o755, 0, 0, "root", "root", isdir=True)
         for name in sorted(live):
             add(name, live[name].encode(), TRIAGE_T + 3, 0o644, 0, 0, "root", "root")
         add("manifest.sha256", ("\n".join(manifest) + "\n").encode(), TRIAGE_T + 29, 0o644, 0, 0, "root", "root")

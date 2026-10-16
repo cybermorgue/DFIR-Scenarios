@@ -79,6 +79,11 @@ Activos relevantes:
 15. ¿Cuánto duró la sesión inicial del atacante, cuándo volvió y con qué método se autenticó la segunda vez?
 16. En la captura hay una transferencia SSH saliente de `db01` mucho mayor que la exfiltración. ¿Qué es y cómo se descarta?
 
+### Extra (difícil)
+
+17. ¿Qué contraseña asignó el atacante a la cuenta nueva?
+18. Sin descifrar nada, ¿cómo separas en la captura las conexiones SSH del atacante, del escáner y de la DBA? Da para cada uno el banner del cliente y su HASSH.
+
 ## 📝 Entregable sugerido
 
 Línea temporal del ataque (hora UTC, origen, acción, evidencia), lista de IOCs, inventario de los mecanismos de persistencia que hay que eliminar y tres recomendaciones concretas de remediación. Separa en la línea temporal lo que hizo el atacante de lo que hizo el equipo de respuesta.
