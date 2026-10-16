@@ -16,8 +16,6 @@ T=db01-triage-2026-09-30/fs
 P=captura/vlan-datos-2026-09-29.pcap
 ```
 
-Una nota sobre la captura antes de empezar. El contenido de SSH siempre va cifrado: contraseñas, comandos y salida no se ven nunca. Lo único que viaja sin cifrar es la negociación previa: el banner de versión de cada lado, las listas de algoritmos (`KEXINIT`, de donde sale el HASSH) y los valores públicos del intercambio de claves. Después, la captura solo aporta metadatos: quién, cuándo, cuánto y a qué ritmo. Lo que el atacante hizo dentro de SSH sale del triage; lo que hizo por HTTP sí se ve entero en la captura.
-
 ## Visión general
 
 ```bash
