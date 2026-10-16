@@ -367,6 +367,7 @@ class RegKey:
         self.name, self.ts = name, ts
         self.sub = {}
         self.values = []
+        self.cls = None
 
     def key(self, path, ts=None):
         """Crea (o devuelve) la subclave indicada por 'A\\B\\C'. ts fija el LastWrite de la última."""
@@ -424,7 +425,8 @@ def write_hive(root, file_name, sd, seq=1):
     def walk(k, parent):
         nm = k.name.encode("latin-1") if all(ord(ch) < 128 for ch in k.name) else k.name.encode("utf-16-le")
         nk = cell(0x4C + len(nm))
-        entry = {"k": k, "nk": nk, "parent": parent, "nm": nm, "vlist": None, "vks": [], "lh": None, "kids": []}
+        entry = {"k": k, "nk": nk, "parent": parent, "nm": nm, "vlist": None, "vks": [], "lh": None, "kids": [],
+                 "cls": cell(len(k.cls) * 2) if k.cls else None}
         plan.append(entry)
         if k.values:
             entry["vlist"] = cell(4 * len(k.values))
@@ -491,9 +493,11 @@ def write_hive(root, file_name, sd, seq=1):
         nk = struct.pack("<2sHQIIIIIIIIIIIIIIIHH", b"nk", flags, k.ts, 0,
                          e["parent"]["nk"][1] if e["parent"] else 0, len(e["kids"]), 0,
                          e["lh"][1] if e["lh"] else 0xFFFFFFFF, 0xFFFFFFFF, len(e["vks"]),
-                         e["vlist"][1] if e["vlist"] else 0xFFFFFFFF, sk[1], 0xFFFFFFFF,
-                         max_sub, 0, max_vn, max_vd, 0, len(e["nm"]), 0) + e["nm"]
+                         e["vlist"][1] if e["vlist"] else 0xFFFFFFFF, sk[1], e["cls"][1] if e["cls"] else 0xFFFFFFFF,
+                         max_sub, 0, max_vn, max_vd, 0, len(e["nm"]), len(k.cls) * 2 if k.cls else 0) + e["nm"]
         put(e["nk"], nk)
+        if e["cls"]:
+            put(e["cls"], k.cls.encode("utf-16-le"))
         if e["vlist"]:
             put(e["vlist"], b"".join(struct.pack("<I", v[4][1]) for v in e["vks"]))
         for name, typ, data, vn, vk, dcell, segs in e["vks"]:
@@ -1068,6 +1072,8 @@ class Sim:
         self.edge = []             # (t, url, título, transición)
         self.recent = []           # (t, ruta destino, tipo)
         self.userassist = {}
+        self.evtx_info = {}
+        self.sysmon_install_t = None
 
     # --------------------------------------------------------------- utilidades
     def tid(self):
@@ -2054,6 +2060,7 @@ def sysmon_deploy(sim, t):
     sv = sim.spawn(t + sec(5.6), r"C:\Windows\Sysmon64.exe", r"C:\Windows\Sysmon64.exe", P["services"], "system", "System", key="sysmon")
     sv.pid = sim.sysmon_pid
     sim.sysmon_from = t + sec(5.9)
+    sim.sysmon_install_t = t + sec(5.6)
     sim.sysmon(t + sec(5.9), 4, 3, [("UtcTime", S.STR, iso(t + sec(5.9), 3)), ("State", S.STR, "Started"),
                                     ("Version", S.STR, "15.15"), ("SchemaVersion", S.STR, "4.90")])
     sim.sysmon(t + sec(6.0), 16, 3, [("UtcTime", S.STR, iso(t + sec(6.0), 3)),
@@ -2133,3 +2140,356 @@ def simulate():
     for ch in CH:
         sim.ev[ch].sort(key=lambda e: e.ft)
     return sim
+
+
+# ======================================================================= RECOGIDA (KAPE): horas de copia
+WINEVT = r"C:\Windows\System32\winevt\Logs" + "\\"
+EVTX_FILES = {  # canal -> (fichero, hora de copia diferida, máximo de chunks si el log está lleno)
+    "Security": ("Security.evtx", T(13, 10, 11, 2.81), 320),
+    "System": ("System.evtx", T(13, 10, 11, 20.37), None),
+    "Application": ("Application.evtx", T(13, 10, 11, 31.02), None),
+    "Sysmon": ("Microsoft-Windows-Sysmon%4Operational.evtx", T(13, 10, 11, 49.55), None),
+    "PSOp": ("Microsoft-Windows-PowerShell%4Operational.evtx", T(13, 10, 12, 12.18), None),
+    "PS": ("Windows PowerShell.evtx", T(13, 10, 12, 25.64), None),
+    "Defender": ("Microsoft-Windows-Windows Defender%4Operational.evtx", T(13, 10, 12, 41.09), None),
+}
+PREFETCH_COPY = T(13, 10, 10, 19.32)
+RECENT_COPY = T(13, 10, 10, 22.11)
+HIVE_COPY = {"SYSTEM": T(13, 10, 12, 55.4), "SOFTWARE": T(13, 10, 13, 5.2), "Amcache": T(13, 10, 13, 20.6),
+             "NTUSER_lmarin": T(13, 10, 13, 28.1), "NTUSER_jtorres": T(13, 10, 13, 31.9), "History": T(13, 10, 13, 36.7)}
+KAPE_END = T(13, 10, 13, 50.83)
+
+
+def build_evtx(sim):
+    out = {}
+    for ch, (fname, copy_t, maxc) in EVTX_FILES.items():
+        evs = [e for e in sim.ev[ch] if e.ft <= copy_t]
+        data, first, last = write_evtx(evs, FQDN, 1, max_chunks=maxc)
+        created = INSTALL + sec(600) if ch != "Sysmon" else sim.sysmon_install_t
+        out[WINEVT + fname] = (data, created, evs[-1].ft if evs else created, copy_t)
+        sim.evtx_info[ch] = (len(evs), first, last, len(data))
+    return out
+
+
+# ======================================================================= COLMENAS
+SD_MACHINE = reg_sd("S-1-5-32-544", "S-1-5-18", [("S-1-5-18", 0xF003F, 3), ("S-1-5-32-544", 0xF003F, 3),
+                                                  ("S-1-5-32-545", 0x20019, 3), ("S-1-15-2-1", 0x20019, 3)])
+def sd_user(sid):
+    return reg_sd(sid, "S-1-5-18", [(sid, 0xF003F, 3), ("S-1-5-18", 0xF003F, 3), ("S-1-5-32-544", 0xF003F, 3)])
+
+def systemtime(ft):
+    d = ft2dt(ft)
+    return struct.pack("<8H", d.year, d.month, (d.weekday() + 1) % 7, d.day, d.hour, d.minute, d.second, 0)
+
+def rot13(s):
+    import codecs
+    return codecs.encode(s, "rot13")
+
+def userassist_data(count, last_ft, focus_ms):
+    return struct.pack("<IIII", 0, count, count, focus_ms) + struct.pack("<f", -1.0) * 10 + \
+        struct.pack("<I", 0xFFFFFFFF) + struct.pack("<Q", last_ft) + struct.pack("<I", 0)
+
+def file_mtime(path):
+    p = path.lower()
+    if p.startswith(r"c:\windows") and "sysmon64" not in p:
+        return FT(2026, 10, 8, 12, 41, 3.2) if hash(p) % 3 else FT(2024, 4, 1, 6, 2, 51.0)
+    if "office16" in p or "clicktorun" in p:
+        return FT(2026, 9, 24, 3, 18, 44.0)
+    if "edge" in p:
+        return FT(2026, 10, 3, 1, 12, 9.0)
+    if "onedrive" in p and "update" not in p:
+        return FT(2026, 9, 30, 22, 4, 17.0)
+    if p == IMPLANT.lower():
+        return T(13, 7, 31, 24.62)
+    return INSTALL + sec(3600)
+
+
+def shimcache(entries):
+    """AppCompatCache formato Windows 10/11 (cabecera 0x34, entradas '10ts')."""
+    out = bytearray(struct.pack("<I", 0x34) + b"\0" * 0x30)
+    for path, mtime in entries:
+        p = path.encode("utf-16-le")
+        body = struct.pack("<H", len(p)) + p + struct.pack("<QI", mtime, 0)
+        out += b"10ts" + struct.pack("<II", zlib.crc32(p) & 0xFFFFFFFF, len(body)) + body
+    return bytes(out)
+
+
+def build_system(sim):
+    ts = INSTALL
+    root = RegKey("CsiTool-CreateHive-{00000000-0000-0000-0000-000000000000}", ts)
+    root.key("Select", ts).set("Current", REG_DWORD, 1).set("Default", REG_DWORD, 1).set("Failed", REG_DWORD, 0).set("LastKnownGood", REG_DWORD, 1)
+    cs = root.key("ControlSet001", ts)
+    cs.key(r"Control\ComputerName\ComputerName", INSTALL + sec(2400)).set("ComputerName", REG_SZ, HOST)
+    lsa = cs.key(r"Control\Lsa", INSTALL + sec(2400))
+    lsa.set("LmCompatibilityLevel", REG_DWORD, 5).set("RunAsPPL", REG_DWORD, 2).set("everyoneincludesanonymous", REG_DWORD, 0)
+    cs.key(r"Control\SecurityProviders\WDigest", INSTALL + sec(2400)).set("UseLogonCredential", REG_DWORD, 0)
+    for name, c in (("JD", "7a3f91c2"), ("Skew1", "e4b20d58"), ("GBG", "19c6a7f3"), ("Data", "5d8e2b40")):
+        lsa.key(name, INSTALL + sec(30)).cls = c
+    tz = cs.key(r"Control\TimeZoneInformation", INSTALL + sec(300))
+    tz.set("Bias", REG_DWORD, 0xFFFFFFC4).set("StandardName", REG_SZ, "@tzres.dll,-312").set("StandardBias", REG_DWORD, 0)
+    tz.set("StandardStart", REG_BINARY, struct.pack("<8H", 0, 10, 0, 5, 3, 0, 0, 0))
+    tz.set("DaylightName", REG_SZ, "@tzres.dll,-311").set("DaylightBias", REG_DWORD, 0xFFFFFFC4)
+    tz.set("DaylightStart", REG_BINARY, struct.pack("<8H", 0, 3, 0, 5, 2, 0, 0, 0))
+    tz.set("TimeZoneKeyName", REG_SZ, "Romance Standard Time").set("DynamicDaylightTimeDisabled", REG_DWORD, 0)
+    tz.set("ActiveTimeBias", REG_DWORD, 0xFFFFFF88)
+    last_shutdown = max(e.ft for e in sim.ev["System"] if e.eid == 13 and e.provider == "Microsoft-Windows-Kernel-General")
+    cs.key(r"Control\Windows", last_shutdown).set("ShutdownTime", REG_BINARY, struct.pack("<Q", last_shutdown)).set("CSDVersion", REG_DWORD, 0)
+    # ShimCache: se escribe al apagar; el implante no está porque el equipo no se ha reiniciado desde el ataque
+    seen = {}
+    for img, runs in sim.execs.items():
+        before = [t for t, _ in runs if t < last_shutdown]
+        if before and not img.startswith("e:"):
+            seen[img] = max(before)
+    order = sorted(seen.items(), key=lambda x: -x[1])[:96]
+    entries = [(_proc_image(sim, i), file_mtime(i)) for i, _ in order]
+    cs.key(r"Control\Session Manager\AppCompatCache", last_shutdown).set("AppCompatCache", REG_BINARY, shimcache(entries))
+    tcp = cs.key(r"Services\Tcpip\Parameters", INSTALL + sec(2400))
+    tcp.set("Hostname", REG_SZ, HOST).set("NV Hostname", REG_SZ, HOST).set("Domain", REG_SZ, DNSDOM).set("NV Domain", REG_SZ, DNSDOM)
+    lease = int(ft2unix(T(13, 6, 41, 31.0)))
+    itf = cs.key(r"Services\Tcpip\Parameters\Interfaces\{6c2f3a1e-8b4d-4f7a-9e21-0d5c3b7a9f14}", T(13, 6, 41, 31.0))
+    for k, v in (("EnableDHCP", 1), ("Lease", 86400), ("LeaseObtainedTime", lease), ("LeaseTerminatesTime", lease + 86400),
+                 ("T1", lease + 43200), ("T2", lease + 75600)):
+        itf.set(k, REG_DWORD, v)
+    itf.set("DhcpIPAddress", REG_SZ, WS_IP).set("DhcpSubnetMask", REG_SZ, "255.255.255.0").set("DhcpServer", REG_SZ, DC_IP)
+    itf.set("DhcpDefaultGateway", REG_MULTI_SZ, [GW_IP]).set("DhcpNameServer", REG_SZ, DC_IP).set("DhcpDomain", REG_SZ, DNSDOM)
+    svc = cs.key("Services", ts)
+    svc.key("Sysmon64", sim.sysmon_install_t).set("Type", REG_DWORD, 0x10).set("Start", REG_DWORD, 2).set("ErrorControl", REG_DWORD, 1) \
+        .set("ImagePath", REG_EXPAND_SZ, r"C:\Windows\Sysmon64.exe").set("DisplayName", REG_SZ, "Sysmon64") \
+        .set("ObjectName", REG_SZ, "LocalSystem").set("Description", REG_SZ, "System Monitor service")
+    svc.key("SysmonDrv", sim.sysmon_install_t).set("Type", REG_DWORD, 1).set("Start", REG_DWORD, 0).set("ErrorControl", REG_DWORD, 1) \
+        .set("ImagePath", REG_EXPAND_SZ, "SysmonDrv.sys").set("DisplayName", REG_SZ, "SysmonDrv").set("Description", REG_SZ, "System Monitor driver")
+    svc.key(r"SysmonDrv\Parameters", sim.sysmon_install_t).set("HashingAlgorithm", REG_DWORD, 0x8000000D).set("Options", REG_DWORD, 0)
+    for name, size in (("Application", 20971520), ("Security", 20971520), ("System", 20971520)):
+        svc.key(rf"EventLog\{name}", INSTALL + sec(1200)).set("MaxSize", REG_DWORD, size).set("Retention", REG_DWORD, 0)
+    svc.key("e1dexpress", INSTALL).set("Type", REG_DWORD, 1).set("Start", REG_DWORD, 3).set("ImagePath", REG_EXPAND_SZ, r"\SystemRoot\System32\drivers\e1d.sys")
+    # USB de IT (primera conexión el 13/10)
+    ser = "4C530001230721112345"
+    usbstor = cs.key(rf"Enum\USBSTOR\Disk&Ven_SanDisk&Prod_Cruzer_Blade&Rev_1.00\{ser}&0", USB_PLUG + sec(1.9))
+    usbstor.set("DeviceDesc", REG_SZ, "@disk.inf,%disk_devdesc%;Unidad de disco").set("FriendlyName", REG_SZ, "SanDisk Cruzer Blade USB Device")
+    usbstor.set("Mfg", REG_SZ, "@disk.inf,%genmanufacturer%;(Unidades de disco estándar)").set("Service", REG_SZ, "disk")
+    usbstor.set("HardwareID", REG_MULTI_SZ, ["USBSTOR\\DiskSanDisk_Cruzer_Blade___1.00", "USBSTOR\\DiskSanDisk_Cruzer_Blade___",
+                                            "USBSTOR\\DiskSanDisk_", "USBSTOR\\SanDisk_Cruzer_Blade___1", "SanDisk_Cruzer_Blade___1", "USBSTOR\\GenDisk", "GenDisk"])
+    usbstor.set("ContainerID", REG_SZ, "{9b1f2e47-3c5a-5d8e-a7f0-2b6c4d8e1a35}").set("ClassGUID", REG_SZ, "{4d36e967-e325-11ce-bfc1-08002be10318}")
+    props = rf"Properties\{{83da6326-97a6-4088-9453-a1923f573b29}}"
+    for pid_, tt in (("0064", USB_PLUG + sec(1.2)), ("0065", USB_PLUG + sec(1.2)), ("0066", USB_PLUG + sec(1.1))):
+        usbstor.key(rf"{props}\{pid_}", tt).set("", 0xFFFF0010, struct.pack("<Q", tt))
+    usb = cs.key(rf"Enum\USB\VID_0781&PID_5567\{ser}", USB_PLUG + sec(0.8))
+    usb.set("DeviceDesc", REG_SZ, "@usb.inf,%usb.massstorage.devicedesc%;Dispositivo de almacenamiento USB").set("Service", REG_SZ, "USBSTOR")
+    usb.set("LocationInformation", REG_SZ, "Port_#0003.Hub_#0001").set("ContainerID", REG_SZ, "{9b1f2e47-3c5a-5d8e-a7f0-2b6c4d8e1a35}")
+    md = root.key("MountedDevices", USB_PLUG + sec(2.4))
+    md.set(r"\DosDevices\C:", REG_BINARY, b"DMIO:ID:" + guid_bytes("{5f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b}"))
+    usbid = (r"_??_USBSTOR#Disk&Ven_SanDisk&Prod_Cruzer_Blade&Rev_1.00#" + ser + r"&0#{53f56307-b6bf-11d0-94f2-00a0c91efb8b}").encode("utf-16-le")
+    md.set(r"\DosDevices\E:", REG_BINARY, usbid)
+    md.set(r"\??\Volume{c1d2e3f4-a5b6-11f1-9e7d-a4bb6d3e9107}", REG_BINARY, usbid)
+    md.set(r"\??\Volume{5f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b}", REG_BINARY, b"DMIO:ID:" + guid_bytes("{5f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b}"))
+    return write_hive(root, "SYSTEM", SD_MACHINE, seq=4123)
+
+
+def _proc_image(sim, img_lower):
+    return sim.execs[img_lower][0][1].image
+
+
+def build_software(sim):
+    ts = INSTALL
+    root = RegKey("CsiTool-CreateHive-{00000000-0000-0000-0000-000000000000}", ts)
+    cv = root.key(r"Microsoft\Windows NT\CurrentVersion", T(8, 13, 32, 10.4))
+    for k, v in (("ProductName", "Windows 10 Pro"), ("EditionID", "Professional"), ("DisplayVersion", "24H2"),
+                 ("ReleaseId", "2009"), ("CurrentBuild", "26100"), ("CurrentBuildNumber", "26100"), ("CurrentVersion", "6.3"),
+                 ("CompositionEditionID", "Enterprise"), ("InstallationType", "Client"), ("SystemRoot", r"C:\Windows"),
+                 ("RegisteredOwner", "Kelbrook Medical"), ("RegisteredOrganization", "Kelbrook Medical Partners"),
+                 ("BuildLab", "26100.ge_release.240331-1435"), ("BuildLabEx", "26100.1.amd64fre.ge_release.240331-1435"),
+                 ("ProductId", "00330-80114-46621-AA951"), ("BuildBranch", "ge_release")):
+        cv.set(k, REG_SZ, v)
+    cv.set("UBR", REG_DWORD, 6899).set("CurrentMajorVersionNumber", REG_DWORD, 10).set("CurrentMinorVersionNumber", REG_DWORD, 0)
+    cv.set("InstallDate", REG_DWORD, int(ft2unix(INSTALL))).set("InstallTime", REG_QWORD, INSTALL)
+    pl = cv.key("ProfileList", INSTALL)
+    for sid, path, t in (("S-1-5-18", r"%systemroot%\system32\config\systemprofile", INSTALL),
+                         ("S-1-5-19", r"%systemroot%\ServiceProfiles\LocalService", INSTALL),
+                         ("S-1-5-20", r"%systemroot%\ServiceProfiles\NetworkService", INSTALL),
+                         (JTORRES_SID, r"C:\Users\adm.jtorres", INSTALL + sec(1366)),
+                         (LMARIN_SID, r"C:\Users\lmarin", LOCAL(3, 17, 8, 44, 12))):
+        k = pl.key(sid, t).set("ProfileImagePath", REG_EXPAND_SZ, path).set("Flags", REG_DWORD, 0 if sid.startswith("S-1-5-21") else 12)
+        k.set("State", REG_DWORD, 0)
+        if sid.startswith("S-1-5-21"):
+            k.set("Sid", REG_BINARY, sid_bytes(sid))
+    root.key(r"Microsoft\Windows\CurrentVersion\Authentication\LogonUI", JT_LOGON) \
+        .set("LastLoggedOnUser", REG_SZ, r"KELBROOK\adm.jtorres").set("LastLoggedOnSAMUser", REG_SZ, r"KELBROOK\adm.jtorres") \
+        .set("LastLoggedOnUserSID", REG_SZ, JTORRES_SID).set("LastLoggedOnDisplayName", REG_SZ, "Jorge Torres (IT)")
+    run = root.key(r"Microsoft\Windows\CurrentVersion\Run", INSTALL + sec(5400))
+    run.set("SecurityHealth", REG_EXPAND_SZ, r"%windir%\system32\SecurityHealthSystray.exe")
+    run.set("RtkAudUService", REG_SZ, r'"C:\Program Files\Realtek\Audio\HDA\RtkAudUService64.exe" -background')
+    root.key(r"Microsoft\Windows\CurrentVersion\RunOnce", INSTALL + sec(7200))
+    ifeo = root.key(r"Microsoft\Windows NT\CurrentVersion\Image File Execution Options", INSTALL)
+    for exe in ("MsMpEng.exe", "msedge.exe", "OUTLOOK.EXE", "EXCEL.EXE"):
+        ifeo.key(exe, INSTALL + sec(4000)).set("UseFilter", REG_DWORD, 0) if exe != "MsMpEng.exe" else \
+            ifeo.key(exe, INSTALL).set("MitigationOptions", REG_BINARY, bytes.fromhex("0001000000000000"))
+    root.key(r"Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging", INSTALL + sec(2600)).set("EnableScriptBlockLogging", REG_DWORD, 1)
+    root.key(r"Microsoft\Windows\CurrentVersion\Policies\System\Audit", INSTALL + sec(2600)).set("ProcessCreationIncludeCmdLine_Enabled", REG_DWORD, 1)
+    root.key(r"Microsoft\Windows\CurrentVersion\Policies\System", INSTALL + sec(2600)).set("EnableLUA", REG_DWORD, 1) \
+        .set("ConsentPromptBehaviorAdmin", REG_DWORD, 5).set("ConsentPromptBehaviorUser", REG_DWORD, 3)
+    nl = root.key(r"Microsoft\Windows NT\CurrentVersion\NetworkList\Profiles\{8C3B2A19-6E4D-4F1A-B2C7-3D9E0F5A6B71}", T(13, 6, 41, 33.0))
+    nl.set("ProfileName", REG_SZ, DNSDOM).set("Description", REG_SZ, DNSDOM).set("Managed", REG_DWORD, 1).set("Category", REG_DWORD, 2)
+    nl.set("DateCreated", REG_BINARY, systemtime(LOCAL(3, 16, 10, 41, 2))).set("DateLastConnected", REG_BINARY, systemtime(LOCAL(10, 13, 8, 41, 33)))
+    nl.set("NameType", REG_DWORD, 6)
+    sig = root.key(r"Microsoft\Windows NT\CurrentVersion\NetworkList\Signatures\Managed\010103000F0000F0080000000F0000F0A1B2C3D4E5F60718293A4B5C6D7E8F90", INSTALL + sec(1700))
+    sig.set("ProfileGuid", REG_SZ, "{8C3B2A19-6E4D-4F1A-B2C7-3D9E0F5A6B71}").set("Description", REG_SZ, DNSDOM).set("Source", REG_DWORD, 8)
+    sig.set("DnsSuffix", REG_SZ, DNSDOM).set("FirstNetwork", REG_SZ, DNSDOM).set("DefaultGatewayMac", REG_BINARY, bytes.fromhex("001c735d21e0"))
+    tid = "{2E5A9C13-7F8B-4D61-A0C4-9B3E1F6D8A27}"
+    tc = root.key(r"Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache", INSTALL)
+    tc.key(rf"Tree\OneDrive Standalone Update Task-{LMARIN_SID}", LOCAL(3, 17, 8, 47, 3)).set("Id", REG_SZ, tid).set("Index", REG_DWORD, 3)
+    tc.key(rf"Tasks\{tid}", LOCAL(3, 17, 8, 47, 3)).set("Path", REG_SZ, rf"\OneDrive Standalone Update Task-{LMARIN_SID}") \
+        .set("URI", REG_SZ, rf"\OneDrive Standalone Update Task-{LMARIN_SID}").set("Author", REG_SZ, "Microsoft Corporation") \
+        .set("Description", REG_SZ, "Standalone Update Task").set("Date", REG_SZ, "2026-03-17T08:47:03")
+    un = root.key(r"Microsoft\Windows\CurrentVersion\Uninstall", INSTALL)
+    for key, name, ver, pub, t in (("Microsoft Edge", "Microsoft Edge", "141.0.3537.71", MS, FT(2026, 10, 3, 1, 12, 9)),
+                                   ("O365ProPlusRetail - es-es", "Aplicaciones de Microsoft 365 para empresas - es-es", "16.0.19231.20150", MS, FT(2026, 9, 24, 3, 18, 44)),
+                                   ("{F2A1B3C4-5D6E-47F8-9A0B-1C2D3E4F5A6B}", "Realtek High Definition Audio Driver", "6.0.9549.1", "Realtek Semiconductor Corp.", INSTALL + sec(4000))):
+        un.key(key, t).set("DisplayName", REG_SZ, name).set("DisplayVersion", REG_SZ, ver).set("Publisher", REG_SZ, pub)
+    root.key(r"Microsoft\Windows Defender\Signature Updates", T(13, 10, 2, 11.0)).set("AVSignatureVersion", REG_SZ, sig_version(T(13, 10, 0))[0]) \
+        .set("EngineVersion", REG_SZ, "1.1.25090.1")
+    root.key(r"Microsoft\Office\ClickToRun\Configuration", FT(2026, 9, 24, 3, 18, 44)).set("Platform", REG_SZ, "x64") \
+        .set("VersionToReport", REG_SZ, "16.0.19231.20150").set("ProductReleaseIds", REG_SZ, "O365ProPlusRetail")
+    return write_hive(root, r"\SystemRoot\System32\Config\SOFTWARE", SD_MACHINE, seq=8817)
+
+
+FOLDER_GUID = {r"c:\program files (x86)": "{7C5A40EF-A0FB-4BFC-874A-C0F2E0B9FA8E}", r"c:\program files": "{6D809377-6AF0-444B-8957-A3773F02200E}",
+               r"c:\windows\system32": "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}", r"c:\windows": "{F38BF404-1D43-42F2-9305-67DE0B28FC23}"}
+
+def recentdocs_value(name):
+    lnk = name + ".lnk"
+    item = _file_item(lnk, False, 0, INSTALL, INSTALL, INSTALL, 0)
+    return name.encode("utf-16-le") + b"\0\0" + item + b"\0\0"
+
+
+def build_ntuser_lmarin(sim):
+    sid = LMARIN_SID
+    first = LOCAL(3, 17, 8, 44, 12)
+    root = RegKey("ROOT", first)
+    sw = root.key("Software", first)
+    run = sw.key(r"Microsoft\Windows\CurrentVersion\Run", sim.run_key_t)
+    run.set("OneDrive", REG_SZ, f'"{IMG_ONEDRIVE}" /background')
+    run.set("MicrosoftEdgeAutoLaunch_9C3A5F2E1B7D4A80C6E2F1D3B5A79E04", REG_SZ, f'"{EDGE}" --no-startup-window --win-session-start')
+    run.set("OneDrive Updater", REG_SZ, IMPLANT)
+    sw.key(r"Microsoft\Windows\CurrentVersion\RunOnce", first)
+    sw.key(r"Microsoft\Office\16.0\Outlook\Security", LOCAL(3, 17, 8, 52, 40)).set("OutlookSecureTempFolder", REG_SZ, OUTLOOK_TMP)
+    adv = sw.key(r"Microsoft\Windows\CurrentVersion\Explorer\Advanced", first)
+    adv.set("HideFileExt", REG_DWORD, 1).set("Hidden", REG_DWORD, 2).set("ShowSuperHidden", REG_DWORD, 0).set("TaskbarAl", REG_DWORD, 1)
+    # RecentDocs: global y por extensión (MRUListEx, más reciente primero)
+    cutoff = HIVE_COPY["NTUSER_lmarin"]
+    last = {}
+    for t, path, kind in sim.recent:
+        if t <= cutoff:
+            last[path] = max(t, last.get(path, 0))
+    folders = {}
+    for path, t in last.items():
+        folders[path.rsplit("\\", 1)[0]] = max(t, folders.get(path.rsplit("\\", 1)[0], 0))
+    def mru_key(kpath, items):
+        items = sorted(items, key=lambda x: -x[1])[:150]
+        k = sw.key(kpath, items[0][1] if items else first)
+        order = list(range(len(items)))
+        for idx, (name, t) in enumerate(items):
+            k.set(str(len(items) - 1 - idx), REG_BINARY, recentdocs_value(name))
+        k.set("MRUListEx", REG_BINARY, b"".join(struct.pack("<I", len(items) - 1 - i) for i in order) + b"\xff\xff\xff\xff")
+    rd = r"Microsoft\Windows\CurrentVersion\Explorer\RecentDocs"
+    allitems = [(p.rsplit("\\", 1)[1], t) for p, t in last.items()] + [(f.rsplit("\\", 1)[1], t) for f, t in folders.items()]
+    mru_key(rd, allitems)
+    by_ext = {}
+    for p, t in last.items():
+        by_ext.setdefault("." + p.rsplit(".", 1)[1].lower(), []).append((p.rsplit("\\", 1)[1], t))
+    for ext, items in by_ext.items():
+        mru_key(rd + "\\" + ext, items)
+    mru_key(rd + r"\Folder", [(f.rsplit("\\", 1)[1], t) for f, t in folders.items()])
+    # UserAssist (ROT13)
+    ua = sw.key(r"Microsoft\Windows\CurrentVersion\Explorer\UserAssist\{CEBFF5CD-ACE2-4F4F-9178-9926F41749EA}\Count", first)
+    def last_run(img):
+        runs = [t for t, p in sim.execs.get(img.lower(), []) if p.parent is not None and p.parent.image.lower().endswith("explorer.exe")
+                and p.user == "lmarin" and t <= cutoff]
+        return (max(runs), len(runs)) if runs else (None, 0)
+    for name, img in (("Microsoft.Office.OUTLOOK.EXE.15", OUTLOOK), ("Microsoft.Office.EXCEL.EXE.15", EXCEL), ("MSEdge", EDGE),
+                      ("MSTeams_8wekyb3d8bbwe!MSTeams", TEAMS), ("Microsoft.Windows.Explorer", r"C:\Windows\explorer.exe")):
+        t, n = last_run(img)
+        if t:
+            ua.set(rot13(name), REG_BINARY, userassist_data(n, t, n * 61000 + 13000))
+            ua.ts = max(ua.ts, t)
+    ua.set(rot13("{6D809377-6AF0-444B-8957-A3773F02200E}\\Microsoft Office\\root\\Office16\\EXCEL.EXE"), REG_BINARY,
+           userassist_data(14, LOCAL(9, 30, 10, 2, 11), 410000))
+    sw.key(r"Microsoft\Windows\CurrentVersion\Explorer\UserAssist\{F4E57C4B-2036-45F0-A9AB-443BCFE33D9F}\Count", first)
+    tp = sw.key(r"Microsoft\Windows\CurrentVersion\Explorer\TypedPaths", LOCAL(9, 21, 9, 12, 3))
+    tp.set("url1", REG_SZ, r"F:\Remesas").set("url2", REG_SZ, r"\\fs01\Facturacion").set("url3", REG_SZ, r"F:\Conciliaciones")
+    mp = sw.key(r"Microsoft\Windows\CurrentVersion\Explorer\MountPoints2", first)
+    mp.key("##fs01#Facturacion", LOCAL(3, 17, 8, 44, 40)).set("_LabelFromReg", REG_SZ, "Facturacion")
+    mp.key("##fs01#Usuarios$#lmarin", LOCAL(3, 17, 8, 44, 41))
+    net = root.key("Network", first)
+    for letter, share in (("F", r"\\fs01\Facturacion"), ("H", r"\\fs01\Usuarios$\lmarin")):
+        net.key(letter, T(13, 6, 44, 14.9)).set("RemotePath", REG_SZ, share).set("UserName", REG_SZ, "") \
+            .set("ProviderName", REG_SZ, "Microsoft Windows Network").set("ProviderType", REG_DWORD, 0x20000) \
+            .set("ConnectionType", REG_DWORD, 1).set("DeferFlags", REG_DWORD, 4)
+    env = root.key("Environment", first)
+    env.set("TEMP", REG_EXPAND_SZ, r"%USERPROFILE%\AppData\Local\Temp").set("TMP", REG_EXPAND_SZ, r"%USERPROFILE%\AppData\Local\Temp")
+    env.set("OneDrive", REG_EXPAND_SZ, r"C:\Users\lmarin\OneDrive - Kelbrook Medical Partners")
+    intl = root.key(r"Control Panel\International", first)
+    intl.set("LocaleName", REG_SZ, "es-ES").set("sShortDate", REG_SZ, "dd/MM/yyyy").set("sTimeFormat", REG_SZ, "H:mm:ss")
+    sw.key(r"Microsoft\Windows\CurrentVersion\Explorer\Shell Folders", first).set("Recent", REG_SZ, r"C:\Users\lmarin\AppData\Roaming\Microsoft\Windows\Recent") \
+        .set("Desktop", REG_SZ, r"C:\Users\lmarin\OneDrive - Kelbrook Medical Partners\Escritorio")
+    return write_hive(root, r"\??\C:\Users\lmarin\ntuser.dat", sd_user(sid), seq=6102)
+
+
+def build_ntuser_jtorres(sim):
+    first = INSTALL + sec(1366)
+    root = RegKey("ROOT", first)
+    sw = root.key("Software", first)
+    sw.key(r"Microsoft\Windows\CurrentVersion\Run", first)
+    sw.key(r"Microsoft\Windows\CurrentVersion\Explorer\Advanced", first).set("HideFileExt", REG_DWORD, 0).set("Hidden", REG_DWORD, 1)
+    mp = sw.key(r"Microsoft\Windows\CurrentVersion\Explorer\MountPoints2", USB_PLUG + sec(3.1))
+    mp.key("{c1d2e3f4-a5b6-11f1-9e7d-a4bb6d3e9107}", USB_PLUG + sec(3.1)).set("_AutorunStatus", REG_BINARY, bytes.fromhex("2000000000000000000000000000000000000000000000000000000000000000"))
+    ua = sw.key(r"Microsoft\Windows\CurrentVersion\Explorer\UserAssist\{CEBFF5CD-ACE2-4F4F-9178-9926F41749EA}\Count", T(13, 10, 9, 58.1))
+    ua.set(rot13("{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\cmd.exe"), REG_BINARY, userassist_data(3, T(13, 10, 9, 58.1), 95000))
+    ua.set(rot13("Microsoft.Windows.Explorer"), REG_BINARY, userassist_data(4, JT_LOGON + sec(4), 120000))
+    root.key("Environment", first).set("TEMP", REG_EXPAND_SZ, r"%USERPROFILE%\AppData\Local\Temp").set("TMP", REG_EXPAND_SZ, r"%USERPROFILE%\AppData\Local\Temp")
+    root.key(r"Control Panel\International", first).set("LocaleName", REG_SZ, "es-ES")
+    return write_hive(root, r"\??\C:\Users\adm.jtorres\ntuser.dat", sd_user(JTORRES_SID), seq=388)
+
+
+def amcache_entries(sim, cutoff):
+    """Ficheros ejecutados con su primera ejecución (antes de la copia de la colmena)."""
+    out = {}
+    for img, runs in sim.execs.items():
+        ts = [t for t, _ in runs if t <= cutoff]
+        if ts:
+            out[img] = (min(ts), runs[0][1].image)
+    return out
+
+
+def build_amcache(sim):
+    cutoff = HIVE_COPY["Amcache"]
+    root = RegKey("{11517B7C-E79D-4e20-961B-75A811715ADD}", INSTALL)
+    r = root.key("Root", INSTALL)
+    iaf = r.key("InventoryApplicationFile", cutoff)
+    for img, (first, real) in sorted(amcache_entries(sim, cutoff).items()):
+        name = real.rsplit("\\", 1)[1]
+        md5, sha256, imp, sha1 = hashes(real)
+        ver, desc, prod, comp, orig = IMG.get(img, ("", "", "", "", name))
+        lph = hashlib.md5(img.encode()).hexdigest()[:16]
+        k = iaf.key(f"{name.lower()}|{lph}", first + sec(1.7))
+        is_os = img.startswith(r"c:\windows")
+        size = IMPLANT_SIZE if img == IMPLANT.lower() else (int(sha1[:5], 16) * 4 + 40960)
+        if img == IMPLANT.lower():
+            comp, prod, link = "", "onedrive updater", "09/28/2026 14:22:51"
+        else:
+            link = ft2dt(file_mtime(img) - sec(86400 * 30)).strftime("%m/%d/%Y %H:%M:%S")
+        k.set("ProgramId", REG_SZ, ("0000f519feec486de87ed73cb92d3cac802400000000" if is_os else
+                                    "0006" + hashlib.sha1(prod.encode()).hexdigest()[:36] + "0000ffff"))
+        k.set("FileId", REG_SZ, "0000" + sha1).set("LowerCaseLongPath", REG_SZ, img).set("LongPathHash", REG_SZ, f"{name.lower()}|{lph}")
+        k.set("Name", REG_SZ, name).set("OriginalFileName", REG_SZ, orig.lower()).set("Publisher", REG_SZ, "" if comp in ("-", "") else comp.lower())
+        k.set("Version", REG_SZ, ver.split(" ")[0] if ver != "-" else "").set("BinFileVersion", REG_SZ, ver.split(" ")[0] if ver != "-" else "")
+        k.set("BinaryType", REG_SZ, "pe64_amd64").set("ProductName", REG_SZ, prod.lower() if prod != "-" else "")
+        k.set("ProductVersion", REG_SZ, ver.split(" ")[0] if ver != "-" else "").set("LinkDate", REG_SZ, link)
+        k.set("BinProductVersion", REG_SZ, ver.split(" ")[0] if ver != "-" else "").set("AppxPackageFullName", REG_SZ, "")
+        k.set("AppxPackageRelativeId", REG_SZ, "").set("Size", REG_QWORD, size).set("Language", REG_DWORD, 0 if not is_os else 3082)
+        k.set("Usn", REG_QWORD, 0x1A2B0000 + int(sha1[:6], 16)).set("IsOsComponent", REG_DWORD, 1 if is_os else 0)
+    ia = r.key("InventoryApplication", INSTALL + sec(4000))
+    for pid_, name, ver, pub, t in (("0006a3c7f1d2e5b8094a6c7d8e9f0a1b2c3d0000ffff", "Microsoft Edge", "141.0.3537.71", MS, FT(2026, 10, 3, 1, 12, 9)),
+                                    ("00061b2c3d4e5f60718293a4b5c6d7e8f9a00000ffff", "Aplicaciones de Microsoft 365 para empresas - es-es", "16.0.19231.20150", MS, FT(2026, 9, 24, 3, 18, 44)),
+                                    ("0006f0e1d2c3b4a5968778695a4b3c2d1e0f0000ffff", "Microsoft OneDrive", "25.184.0921.0002", MS, FT(2026, 9, 30, 22, 4, 17))):
+        ia.key(pid_, t).set("Name", REG_SZ, name).set("Version", REG_SZ, ver).set("Publisher", REG_SZ, pub).set("Source", REG_SZ, "AddRemoveProgram")
+    return write_hive(root, r"\??\C:\Windows\AppCompat\Programs\Amcache.hve", SD_MACHINE, seq=2210)
