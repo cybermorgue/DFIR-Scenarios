@@ -8,7 +8,7 @@ tags:
 
 # Solución — Escenario 04: El servidor que nadie toca
 
-Todas las horas están en UTC. Los comandos suponen que has descomprimido el triage en `triage/INT01/` y que tienes los EVTX convertidos a JSON con `EvtxECmd --json` o `evtx_dump -o jsonl`. Cada respuesta indica la fuente y el filtro que la demuestra.
+Todas las horas están en UTC salvo que se indique lo contrario; **el `access.log` del operador también va en UTC y sin zona horaria**, mientras que `mirth.log` va en hora local (CEST). Los comandos suponen que has descomprimido el triage en `triage/INT01/` y que tienes los EVTX convertidos a JSON con `EvtxECmd --json` o `evtx_dump -o jsonl`. Cada respuesta indica la fuente y el filtro que la demuestra.
 
 ## Qué es real y qué es inventado
 
@@ -24,7 +24,7 @@ Todas las horas están en UTC. Los comandos suponen que has descomprimido el tri
 | UTC | Evento | Fuente |
 | --- | --- | --- |
 | 04/10 18:52:05 | Huella de versión: `GET /api/server/version` con `X-Requested-With: OpenAPI` desde `104.234.26.225` | `fw01` (`TMP-soporte-mirth`), `mirth.log` |
-| 18:52:47.550 | `POST /api/users` (XML) y, a las 18:52:48.000, `cmd.exe /c whoami` hijo de `mcservice.exe` | `fw01`, `mirth.log` (18:52:48,35), Sysmon 1 / 4688 |
+| 18:52:47.550 | `POST /api/users` (XML) y, a las 18:52:48.000, `cmd.exe /c whoami` hijo de `mcservice.exe` | `fw01`, `mirth.log` (20:52:48,35 hora local), Sysmon 1 / 4688 |
 | 18:53:40.126 | `run.ps1` (1.ª vez). Baliza `ping?h=PS-INT01-INT01$`; `csc.exe` falla; el proceso termina | `access.log`, Sysmon 1/3/5, 4104 |
 | 18:57:43.738 | Comprobación manual: `iwr .../ping?h=INT01` | `access.log` (UA de PowerShell), Sysmon 1/3 |
 | 18:57:55.972 | `run.ps1` (2.ª vez), mismo fallo | Ídem |
@@ -34,12 +34,12 @@ Todas las horas están en UTC. Los comandos suponen que has descomprimido el tri
 | 18:59:26.697 | `OneDrive.exe` → `104.234.26.225:8084`: 40 bytes enviados, 8 431 616 recibidos | `fw01`, PCAP, Sysmon 3 |
 | 18:59:30 | Segunda sesión al `:8084` (la del implante en memoria) hasta las 19:43 | `fw01` |
 | 19:01:30 | `winpty.dll` y `winpty-agent.exe` extraídos a `C:\Windows\Temp\winpty-0.4.3-a1f37c2e`; shell interactiva | Sysmon 11/29/1 |
-| 19:02 → 19:13 | Reconocimiento (ver pregunta 12) | Sysmon 1, 4688 |
+| 19:02 → 19:13 | Reconocimiento (ver el apartado «Reconocimiento») | Sysmon 1, 4688 |
 | 19:18:30 | `curl.exe` descarga `client64.exe` como `OneSyncHost.exe` (**línea inventada**) | `access.log`, Sysmon 1/3/11/29 |
 | 19:19:05 | `OneSyncHost.exe install`: servicio «OneDrive Sync Host» | System 7045, Security 4697, Sysmon 13, `SYSTEM` |
 | 19:19:20 | Arranca el servicio. Consulta el bucket cada 60 s durante una hora | Sysmon 1/22/3, `fw01` |
 | 19:27:40 → 19:33:10 | `tar -czf C:\Windows\Temp\mc.tgz "…\appdata\mirthdb"` | Sysmon 1 / 11 |
-| 19:36:17 | `OneSyncHost.exe` sube 233 975 779 bytes al bucket en 46,5 s | `fw01`, Sysmon 3/22 |
+| 19:36:06 | `OneSyncHost.exe` sube 216 666 932 bytes al bucket en 44,2 s | `fw01`, Sysmon 3/22 |
 | 19:42:00 | `del C:\Windows\Temp\mc.tgz` | Sysmon 26 |
 | 19:43 | Se cierra la shell. `OneDrive.exe` sigue vivo | Sysmon 5 de `winpty-agent.exe` y `cmd.exe` |
 | 13/10 08:31 | `adm.jtorres` reinicia `int01` por RDP; mueren `OneDrive.exe` y sus padres; `OneSyncHost` arranca solo (08:33:15) | System 1074, Sysmon 1 |
@@ -50,7 +50,7 @@ Todas las horas están en UTC. Los comandos suponen que has descomprimido el tri
 
 **1. Quién, cómo y cuándo.** `104.234.26.225` explotó **Mirth Connect 4.4.0** en `8443/tcp` con **CVE-2023-43208** (RCE sin autenticación por deserialización XML con XStream, parche en 4.4.1). Antes, a las **18:52:05**, preguntó la versión con `GET /api/server/version` y la cabecera `X-Requested-With: OpenAPI`; el exploit llega a las **18:52:47.550** como `POST /api/users`.
 - `fw01`: `awk -F, '$5=="104.234.26.225" && $8==8443' red/fw01*.log` → 7 conexiones, la regla `TMP-soporte-mirth` (abierta desde marzo a cualquier origen). Seis de ellas lanzan un comando, una por cada `cmd.exe`.
-- `mirth.log`: excepción `ConversionException` de XStream en `XmlMessageBodyReader` a las 18:52:48,35 («Unable to deserialize request body (POST /api/users)»). La excepción aparece *después* de que la orden se haya lanzado.
+- `mirth.log`: excepción `ConversionException` de XStream en `XmlMessageBodyReader` a las 20:52:48,35 (**hora local, CEST**: la JVM no escribe en UTC; el log va en UTC+2 igual que la zona del equipo, `Romance Standard Time` en `SYSTEM\…\TimeZoneInformation`) («Unable to deserialize request body (POST /api/users)»). La excepción aparece *después* de que la orden se haya lanzado.
 - Sysmon 1: `cmd.exe /c whoami` con `ParentImage` `C:\Program Files\Mirth Connect\mcservice.exe` a las 18:52:48.000.
 
 **2. Cuenta.** `NT AUTHORITY\SYSTEM`: Mirth corre como servicio con LocalSystem (Sysmon 1, campo `User`). Por eso `$env:USERNAME` vale `INT01$` y la baliza del script es `ping?h=PS-INT01-INT01$` (`PS-<COMPUTERNAME>-<USERNAME>`). Un usuario interactivo daría `PS-<HOST>-<usuario>`. El `$` final es el rasgo de «cuenta de equipo / servicio».
@@ -64,21 +64,21 @@ Todas las horas están en UTC. Los comandos suponen que has descomprimido el tri
 - `run2.ps1` captura el error con `try/catch` (por eso no hay 4100) y se queda en un bucle `Start-Sleep 3600`: su `powershell.exe` no tiene Sysmon 5 hasta el reinicio.
 
 **5. `OneDrive.exe`.** `OriginalFileName` **`ldr_win3.exe`**, sin empresa ni descripción, `FileVersion` `0.0.0.0`. SHA-256 `ad07d54b62359749b7a32c265e19e5f36cd4962cf957ea6c0fb07ceddb702230`, MD5 `215336e9270941186ac2bca89425e49b`, IMPHASH `f34d5f2d4577ed6d9ceec516c1f5a744`.
-- Sysmon 1: `jq 'select(.EventID==1 and (.Image|endswith("OneDrive.exe")))'`. Cuelga de `powershell.exe`, vive en `C:\ProgramData\Microsoft\OneDrive\` (no es la ruta de OneDrive de Microsoft, que va por usuario) y no está firmado. El nombre de recurso `ldr_win3.exe` delata que es un *loader*. Es un binario .NET de 9,5 KB: carga `mscoree.dll`/`clr.dll` (Sysmon 7).
+- Sysmon 1: `jq 'select(.EventID==1 and (.Image|endswith("OneDrive.exe")))'`. Cuelga de `powershell.exe`, vive en `C:\ProgramData\Microsoft\OneDrive\` (no es la ruta de OneDrive de Microsoft, que va por usuario) y sus metadatos están vacíos (sin empresa, descripción ni producto). El nombre de recurso `ldr_win3.exe` delata que es un *loader*. Es un binario .NET de 9,5 KB: carga `mscoree.dll`/`clr.dll` (Sysmon 7).
 - Amcache: `FileId` `0000` + SHA-1 `9a199096b7ed2f23166296e2fde5f8dcdf8dee51`, `LinkDate` 1970 (timestamp PE a cero).
 
 **6. El blob.** Base64 → **XOR con clave de 32 bytes repetida** `9C9066C118BC1C5BEC80CECD029248DCE0626814CF4D89FBD86AB1354AAEE54A` → **1388 bytes** (el valor de `dec-ok-1388`). En CyberChef: *From Base64* → *XOR* (clave hex, `Standard`). Los 4104 de `run.ps1`/`run2.ps1` contienen el blob completo.
 - **Nota sobre el parche `int3`:** el resultado es el shellcode real con los 9 bytes de `mov rax, gs:[0x60]` (offset `0x475`) sustituidos por `0xCC`. El resto del análisis es idéntico al original.
 
 **7. Destino y resolución de APIs.** El shellcode conecta a **`104.234.26.225:8084`** (`0x1F94` en el `sockaddr`). Envía un saludo de **40 bytes**: `w64   ` (arquitectura), `1f 94` (puerto) y el host en trozos de 4 caracteres (`104.`, `234.`, `26.2`, `25\0\0`). Se ve en el PCAP (`tcp.port==8084 && tcp.len==40`) y en `fw01` (40 bytes enviados).
-- Resuelve las APIs **por hash ROR13** (rutina `block_api` de Metasploit): recorre el PEB → `InMemoryOrderModuleList` → tablas de exportación y compara `ror13(nombre)` con constantes, por ejemplo `0x0726774C` (`LoadLibraryA`), `0x006B8029` (`WSAStartup`), `0xE0DF0FEA` (`WSASocketA`), `0x6174A599` (`connect`), `0x5F38EBC2` (`send`), `0x5FC8D902` (`recv`), `0xE553A458` (`VirtualAlloc`) y `0xE449F330` (`Sleep`). Ninguna cadena de API aparece en claro.
+- Resuelve las APIs **por hash ROR13** (rutina `block_api` de Metasploit): recorre el PEB → `InMemoryOrderModuleList` → tablas de exportación y compara `ror13(nombre)` con constantes, por ejemplo `0x0726774C` (`LoadLibraryA`), `0x006B8029` (`WSAStartup`), `0xE0DF0FEA` (`WSASocketA`), `0x6174A599` (`connect`), `0x5F38EBC2` (`send`), `0x5FC8D902` (`recv`), `0xE553A458` (`VirtualAlloc`) y `0xE449F330` (`GetTempPathA`, la que localiza `%TEMP%` para el kill switch de la pregunta 9). Ninguna cadena de API aparece en claro.
 - Recibe la fase 3 en un buffer RWX de 30 MB.
 
-**8. Clave de la fase 3.** **XOR de un byte, `0x99`** (el shellcode lleva `80 34 39 99`, `xor byte [rcx+rdi],0x99`). En Wireshark: *Follow TCP stream* de la sesión → exportar los bytes del servidor → `python3 -c "import sys;d=open('f3.bin','rb').read();print(bytes(b^0x99 for b in d[:40]))"` → `KELBROOK-04 FASE3 FICTICIA`. En el original sería el implante en memoria; aquí es un buffer ficticio sin código. Su tamaño (8 431 616 B) coincide con `fw01`.
+**8. Clave de la fase 3.** **XOR de un byte, `0x99`** (el shellcode lleva `80 34 39 99`, `xor byte [rcx+rdi],0x99`). En Wireshark: *Follow TCP stream* de la sesión → exportar los bytes del servidor → `python3 -c "import sys;d=open('f3.bin','rb').read();print(bytes(b^0x99 for b in d[:40]))"` → `KELBROOK-04 FASE3 FICTICIA`. En el original sería el implante en memoria; aquí es un buffer ficticio sin código. `fw01` registra para esa sesión 8 431 616 bytes recibidos y 40 enviados; el PCAP solo conserva los primeros 64 KB, sin cierre de la conexión (Suricata guarda el comienzo del flujo).
 
 **9. Kill switch.** `%TEMP%\log_de.log`. Bajo `SYSTEM` es **`C:\Windows\Temp\log_de.log`**: si existe, el shellcode no continúa. Sirve para vacunar equipos, aunque es una medida frágil.
 
-**10. Shell interactiva: winpty.** A las 19:01:30 `OneDrive.exe` extrae `winpty.dll` y `winpty-agent.exe` (versión 0.4.3, componentes legítimos de código abierto) a `C:\Windows\Temp\winpty-0.4.3-a1f37c2e` (Sysmon 11 y 29, sin firma ni metadatos). Después: `OneDrive.exe` → `winpty-agent.exe` → `cmd.exe` → `whoami`, `ipconfig`, `tar`, `curl`…; hay un `conhost.exe` por medio. Winpty emula un terminal en Windows para que el operador pueda usar una shell «de verdad».
+**10. Shell interactiva: winpty.** A las 19:01:30 `OneDrive.exe` extrae `winpty.dll` y `winpty-agent.exe` (versión 0.4.3, componentes legítimos de código abierto) a `C:\Windows\Temp\winpty-0.4.3-a1f37c2e` (Sysmon 11 y 29, sin firma ni metadatos). Sysmon 7 registra la carga de `winpty.dll` por `OneDrive.exe` (sin firma y desde `Temp`: la regla del diseño la captura). Después: `OneDrive.exe` → `winpty-agent.exe` → `cmd.exe` → `whoami`, `ipconfig`, `tar`, `curl`…; `winpty-agent.exe` tiene además su propio `conhost.exe`. Winpty emula un terminal en Windows para que el operador pueda usar una shell «de verdad».
 
 **11. Persistencia.** Servicio **`OneSyncHost`** (nombre para mostrar «OneDrive Sync Host»).
 - System **7045** a las 19:19:05.6: `ImagePath` `C:\ProgramData\Microsoft\OneDrive\Sync\OneSyncHost.exe`, inicio automático, cuenta `LocalSystem`. Security **4697** equivalente.
@@ -87,10 +87,10 @@ Todas las horas están en UTC. Los comandos suponen que has descomprimido el tri
 - Tras el reinicio del 13/10 vuelve a arrancar solo (08:33:15, padre `services.exe`): la persistencia funciona.
 
 **12. Datos, destino, proceso y volumen.** Se llevó la base de datos de mensajes de Mirth (resultados de analíticas, datos de salud):
-- Sysmon 1 (19:27:40): `tar -czf C:\Windows\Temp\mc.tgz "C:\Program Files\Mirth Connect\appdata\mirthdb"`, hijo de `cmd.exe`, hijo de `winpty-agent.exe`. Sysmon 11 crea `mc.tgz`; ocupa **231 201 363 bytes**; termina a las 19:33:10.
-- A las **19:36:17**, `OneSyncHost.exe` (PID 3852) sube al bucket `kb7f3-hk-sync-0926.oss-cn-hongkong.aliyuncs.com` (`203.0.113.180:443`): `fw01` registra **233 975 779 bytes enviados** (= tamaño × 1,012 por la sobrecarga de TLS) en 46,5 s. Es, de largo, la sesión más grande de las 209 que `fw01` registra hacia esa IP.
-- **No hay `curl` ni línea de comandos de subida**: el implante lleva el SDK de OSS. Se demuestra cruzando tres fuentes: Sysmon 22 (resolución del bucket por `OneSyncHost.exe`), Sysmon 3 (PID 3852 → `203.0.113.180:443`) y `fw01` (volumen). Filtro: `awk -F, '$7=="203.0.113.180" {print $1,$10,$11}' red/fw01*.log | sort -k2 -n | tail`.
-- Un segundo y medio antes (19:36:15.9) hay una consulta al bucket con una respuesta mayor de lo normal (≈1,1–1,5 KB frente a ≈0,4–0,6 KB): es la que recoge la tarea que dejó el operador.
+- Sysmon 1 (19:27:40): `tar -czf C:\Windows\Temp\mc.tgz "C:\Program Files\Mirth Connect\appdata\mirthdb"`, hijo de `cmd.exe`, hijo de `winpty-agent.exe`. Sysmon 11 registra la creación de `mc.tgz` (sin tamaño: no hay `$MFT`) y `tar.exe` termina a las 19:33:10.
+- A las **19:36:06**, `OneSyncHost.exe` (PID 13376) sube al bucket `kb7f3-hk-sync-0926.oss-cn-hongkong.aliyuncs.com` (`203.0.113.180:443`): `fw01` registra **216 666 932 bytes enviados** en 44,2 s: el `.tgz` pesaba algo menos (la sobrecarga de TLS es de aproximadamente un 1 %), unos 214 MB. El tamaño exacto no se puede demostrar con el triage (pregunta 16). Es, de largo, la sesión más grande de las 209 que `fw01` registra hacia esa IP.
+- **No hay `curl` ni línea de comandos de subida**: el implante lleva el SDK de OSS. Se demuestra cruzando tres fuentes: Sysmon 22 (resolución del bucket por `OneSyncHost.exe`), Sysmon 3 (PID 13376 → `203.0.113.180:443`) y `fw01` (volumen). Filtro: `awk -F, '$7=="203.0.113.180" {print $1,$10,$11}' red/fw01*.log | sort -k2 -n | tail`.
+- Poco antes (19:36:04) hay una consulta al bucket con una respuesta mayor de lo normal (≈1,2–1,4 KB frente a ≈0,4–0,6 KB): es la que recoge la tarea que dejó el operador.
 - 19:42:00: `del C:\Windows\Temp\mc.tgz` (Sysmon 26 con la shell como proceso). `del` es una orden interna de `cmd.exe`: no crea proceso, solo deja el 26.
 - El resto de consultas al bucket: cada 60 s durante la primera hora (19:20:20 → 20:19) y después cada 4 h ±10 %. Tras el reinicio del 13/10 se repite el ciclo.
 
@@ -107,11 +107,11 @@ Todas las horas están en UTC. Los comandos suponen que has descomprimido el tri
 - **Amcache** (`InventoryApplicationFile`): `onedrive.exe|…` y `onesynchost.exe|…` con `FileId` = `0000` + SHA-1 reales.
 - **Sysmon 1/29**, **4688 con línea de comandos**, **ShimCache** (`AppCompatCache` del `SYSTEM`, que se persiste en el apagado y por eso recoge los dos ejecutables hasta el reinicio del 13/10), y **7045**.
 
-**15. RGPD.** Los resultados de analíticas son **datos de salud** (art. 9). Hay una brecha de confidencialidad con exfiltración confirmada: **sí hay que notificar a la AEPD (art. 33), en 72 h desde que Kelbrook tiene constancia de la brecha**: desde el aviso del CERT del **19/10 a las 09:10** o desde que IT lo confirma con las evidencias, **no desde el 04/10**. Por el alto riesgo para los afectados es probable que también deba comunicarse a los interesados (art. 34), sin dilaciones indebidas. Además, documentar el incidente (art. 33.5) y avisar a Ardeal como responsable/encargado según el contrato.
+**15. RGPD.** Los resultados de analíticas son **datos de salud** (art. 9). Hay una brecha de confidencialidad con exfiltración confirmada: **sí hay que notificar a la AEPD (art. 33), en 72 h desde que Kelbrook tiene constancia de la brecha**: desde el aviso del CERT del **19/10 a las 07:10 UTC** (09:10 hora local) o desde que IT lo confirma con las evidencias, **no desde el 04/10**. Por el alto riesgo para los afectados es probable que también deba comunicarse a los interesados (art. 34), sin dilaciones indebidas. Además, documentar el incidente (art. 33.5) y avisar a Ardeal como responsable/encargado según el contrato.
 
 **16. Lo que falta.** El triage no recoge `$MFT`, `$UsnJrnl:$J`, SRUM, la memoria ni las bases de Mirth. No se puede responder con certeza qué contenía `mc.tgz` (se borró y no queda copia), qué ejecutó la fase 3 en memoria ni qué más consultó (la fase 3 nunca toca disco y `OneDrive.exe` murió el 13/10: **ni una captura de memoria habría servido ya**). Habría recogido: `$MFT`+`$J` (aparición y borrado de `mc.tgz`), SRUM (bytes por proceso y aplicación), la base `mirthdb` y los logs de Jetty de Mirth, DNS de `dc01`/`dns01`, el binario `OneSyncHost.exe` (para analizarlo y extraer su configuración de OSS) y una captura de memoria *antes* del reinicio. Con eso se sabría exactamente qué mensajes había en `mirthdb` en esa fecha.
 
-**17. Parches.** La versión `5.1.17763.6054` es la de Windows PowerShell en **Windows Server 2019 / Windows 10 1809 con el acumulativo de julio de 2024** (revisión `.6054`; a confirmar contra el historial de actualizaciones de Microsoft para 17763). En Server 2019 la revisión de PowerShell sube con cada parche acumulativo, así que un `.6054` en octubre de 2026 indica **más de dos años sin parchear**. Se corrobora con `UBR` = 6054 en `SOFTWARE\Microsoft\Windows NT\CurrentVersion`, con la ausencia de eventos de `WindowsUpdateClient` en System, con la clave `WUServer` de WSUS apuntando a un servidor que ya no responde (`SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate`) y con que el único reinicio de la ventana es manual. El Mirth sin parchear (4.4.0, con 4.4.1 disponible desde octubre de 2023) es de la misma familia.
+**17. Parches.** La versión `5.1.17763.6054` es la de Windows PowerShell en **Windows Server 2019 / Windows 10 1809 con el acumulativo de julio de 2024** (revisión `.6054`; a confirmar contra el historial de actualizaciones de Microsoft para 17763). En Server 2019 la revisión de PowerShell sube con cada parche acumulativo, así que un `.6054` en octubre de 2026 indica **más de dos años sin parchear**. Se corrobora con `UBR` = 6054 en `SOFTWARE\Microsoft\Windows NT\CurrentVersion`, con la ausencia de eventos de `WindowsUpdateClient` en System, con la clave `WUServer` de WSUS (`SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate`), que apunta a `wsus01`: es la causa que da el caso (enlace roto en julio de 2024) y se ve en que ningún origen de actualización ha entregado nada desde entonces y con que el único reinicio de la ventana es manual. El Mirth sin parchear (4.4.0, con 4.4.1 disponible desde octubre de 2023) es de la misma familia.
 
 **18. La línea inventada.** `2026-10-04T19:18:30.5… | GET | 192.0.2.25 /client64.exe | UA=curl/7.55.1`. Se sabe porque es la única de `192.0.2.25` que no está en la copia original del log (ver la sección «Qué es real y qué es inventado»): en el log real ninguna víctima descarga el implante. El UA `curl/7.55.1` es el del `curl.exe` incluido en Server 2019 y concuerda con el Sysmon 1 de `curl.exe` hijo de `cmd.exe`; la conexión (Sysmon 3, `fw01`) precede a la línea en menos de un segundo, igual que las demás.
 
@@ -119,7 +119,7 @@ Todas las horas están en UTC. Los comandos suponen que has descomprimido el tri
 
 ## Notas para el que corrige
 
-- El material tiene **ruido de fondo** real: 6 semanas de MLLP de Ardeal en días laborables (sin el 12/10), escaneos al `8443` todos los días, RDP de `adm.jtorres` los martes, el mantenimiento de la VM del 15/09 y las actualizaciones de firmas de Defender. Por eso el ataque no salta con un solo filtro.
+- El material tiene **ruido de fondo** real: 7 semanas de MLLP de Ardeal en días laborables (sin el 12/10), escaneos al `8443` todos los días, RDP de `adm.jtorres` los martes, el mantenimiento de la VM del 15/09 y las actualizaciones de firmas de Defender. Por eso el ataque no salta con un solo filtro.
 - **Defender no detecta nada:** las muestras eran nuevas, el shellcode va cifrado, el C# de `Add-Type` no llega a compilar y la fase 3 nunca toca disco. Hay además una exclusión de `C:\Program Files\Mirth Connect\` en `SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths`, creada por el integrador, que es un hallazgo de configuración. **Hoy esas muestras sí estarían detectadas.**
 - La fase 3 que llega por `:8084` se **supone** el mismo implante del DLL embebido en `client64.exe` convertido a shellcode: es una inferencia del análisis estático.
 - El C2 del implante persistente no se pudo extraer (las cadenas están cifradas por garble). El bucket de OSS es inventado para no atribuir a infraestructura real nada que no se haya observado.

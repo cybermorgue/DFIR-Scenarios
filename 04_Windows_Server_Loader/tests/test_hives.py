@@ -41,6 +41,9 @@ def test_servicio_onesynchost(sim, tmp_path):
     mc = vals(h, r"\ControlSet001\Services\Mirth Connect Service")
     assert mc["ObjectName"] == "LocalSystem" and MCSERVICE in mc["ImagePath"]
     assert vals(h, r"\ControlSet001\Control\ComputerName\ComputerName")["ComputerName"] == "INT01"
+    tz = vals(h, r"\ControlSet001\Control\TimeZoneInformation")
+    assert tz["TimeZoneKeyName"] == "Romance Standard Time"
+    assert tz["Bias"] & 0xFFFFFFFF == 0xFFFFFFC4 and tz["ActiveTimeBias"] & 0xFFFFFFFF == 0xFFFFFF88
 
 
 def test_amcache_onedrive_sha1(sim, tmp_path):

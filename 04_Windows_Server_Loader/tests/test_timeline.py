@@ -65,3 +65,17 @@ def test_application_tiene_actividad(sim):
     app = [e for e in sim.ev["Application"]]
     assert len(app) > 40
     assert {e.provider for e in app} >= {"Microsoft-Windows-Security-SPP"}
+
+
+def test_el_ataque_no_salta_en_un_recuento_diario():
+    from collections import Counter
+    from statistics import median
+    from gen.timeline import attack
+    sim = Sim()
+    background(sim, START_T, TRIAGE_T)
+    attack(sim)
+    for ch, ratio in (("Sysmon", 3.0), ("Security", 3.0)):
+        por_dia = Counter(ft2dt(e.ft).date() for e in sim.ev[ch])
+        mediana = median(por_dia[d] for d in por_dia if d.isoformat() < "2026-10-04")
+        assert por_dia[ft2dt(FT(2026, 10, 4)).date()] / mediana < ratio, (ch, mediana)
+    assert len([e for e in sim.ev["Security"] if e.eid == 4624]) > 1500

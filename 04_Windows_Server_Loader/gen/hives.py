@@ -47,7 +47,10 @@ def build_system(sim):
     cs = root.key("ControlSet001", INSTALL)
     cs.key(r"Control\ComputerName\ComputerName", INSTALL + sec(600)).set("ComputerName", REG_SZ, HOST)
     tz = cs.key(r"Control\TimeZoneInformation", INSTALL + sec(300))
-    tz.set("Bias", REG_DWORD, 0).set("TimeZoneKeyName", REG_SZ, "UTC").set("ActiveTimeBias", REG_DWORD, 0)
+    tz.set("Bias", REG_DWORD, 0xFFFFFFC4).set("ActiveTimeBias", REG_DWORD, 0xFFFFFF88) \
+        .set("StandardName", REG_SZ, "@tzres.dll,-312").set("DaylightName", REG_SZ, "@tzres.dll,-311") \
+        .set("StandardBias", REG_DWORD, 0).set("DaylightBias", REG_DWORD, 0xFFFFFFC4) \
+        .set("TimeZoneKeyName", REG_SZ, "Romance Standard Time").set("DynamicDaylightTimeDisabled", REG_DWORD, 0)
     # ShimCache: se persiste al apagar, así que refleja hasta el reinicio del 13/10 (OneDrive.exe sí está)
     cs.key(r"Control\Windows", REBOOT_T).set("ShutdownTime", REG_BINARY, struct.pack("<Q", REBOOT_T + sec(21.0)))
     seen = {}

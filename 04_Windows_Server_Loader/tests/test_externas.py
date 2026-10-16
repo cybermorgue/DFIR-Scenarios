@@ -83,13 +83,13 @@ def test_accesslog_ordenado_y_formato(run):
     assert all(rx.match(l) for l in lines)
     assert [l[:26] for l in lines] == sorted(l[:26] for l in lines)
     assert any(f"| {KB_PUBLIC} /client64.exe | UA=curl/7.55.1" in l and l.startswith("2026-10-04T19:18:3") for l in lines)
-    assert "sysupdate" not in txt and "45.134.213.215" not in txt and "203.0.113.77 /access.log" in txt
+    assert "203.0.113.77 /access.log" in txt
     assert lines[-1] < "2026-10-16T08:37:59"
 
 
-def test_index_sin_sysupdate():
+def test_index_lista_solo_los_siete_ficheros():
     h = index_html()
-    assert "sysupdate" not in h.lower()
+    assert h.count("<li>") == 7
     for n in ("OneDrive.exe", "client64.exe", "run.ps1", "run2.ps1", "bootstrap_enc.txt", "server.py", "access.log"):
         assert f'href="{n}"' in h
 
@@ -119,5 +119,12 @@ def test_ficha_y_mirth(run):
     sim, _ = run
     assert "ad07d54b62359749b7a32c265e19e5f36cd4962cf957ea6c0fb07ceddb702230" in ficha_muestras()
     log = mirth_log(sim)
-    assert "/api/server/version" in log and "XStream" in log and "2026-10-04 18:52:48" in log
+    assert "/api/server/version" in log and "XStream" in log and "2026-10-04 20:52:48" in log      # mirth.log va en hora local (CEST)
     assert "https.port = 8443" in mirth_properties()
+
+
+def test_pcap_es_un_corte_sin_cierre(pcap):
+    """fw01 dice que la sesión transfirió toda la fase 3: la captura es un recorte del principio, no una sesión cerrada."""
+    for f in frames(pcap):
+        tcp = f[34:]
+        assert not tcp[13] & 0x05          # ni FIN ni RST

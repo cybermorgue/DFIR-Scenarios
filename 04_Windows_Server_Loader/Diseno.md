@@ -27,7 +27,7 @@ El escenario recrea una campaña **real**. El 16/10/2026 se accedió a un *open 
 | Clave XOR de 32 bytes, shellcode de 1388 bytes, hashes ROR13, saludo `w64`, XOR `0x99` de la fase 3, kill switch `%TEMP%\log_de.log` | El nombre del bucket de OSS |
 | La build de PowerShell `5.1.17763.6054` del User-Agent, que delata un Server 2019 sin parchear desde mediados de 2024 | El aviso del CERT que abre el caso |
 
-`sysupdate`, que también estaba en el directorio, **queda fuera del escenario por decisión del autor**. No aparece en ningún artefacto, tampoco en el listado del *open directory* ni en el `access.log`.
+`<MUESTRA_EXCLUIDA>`, que también estaba en el directorio, **queda fuera del escenario por decisión del autor**. No aparece en ningún artefacto, tampoco en el listado del *open directory* ni en el `access.log`.
 
 ## Premisa
 
@@ -88,10 +88,10 @@ Configuración relevante de `int01`:
 
 ## La víctima real que pasa a ser Kelbrook
 
-Estas son las líneas reales de la primera víctima del log (host `ASPEE-APP`, cuenta `ASPEE-APP$`). En el escenario **son de Kelbrook**:
+Estas son las líneas reales de la primera víctima del log (host `<HOST_REAL>`, cuenta `<HOST_REAL>$`). En el escenario **son de Kelbrook**:
 - se conservan las marcas de tiempo, las rutas y los User-Agent exactos, al microsegundo;
 - la IP real pasa a ser `192.0.2.25`;
-- el nombre `ASPEE-APP` pasa a ser `INT01`;
+- el nombre `<HOST_REAL>` pasa a ser `INT01`;
 - los valores de `alloc-` y `thread-` se conservan.
 
 La IP real de esa víctima no aparece en ningún artefacto.
@@ -214,8 +214,8 @@ La copia que entrega el CERT es el `access.log` real con estos cambios:
   - pruebas manuales con UA de PowerShell y reintentos a ritmo humano;
   - ráfagas automáticas desde rangos de nube;
   - aparición después de que crawlers indexaran el directorio, a partir del 05/10.
-- Se **eliminan** todas las líneas de `/sysupdate`.
-- La IP real de quien copió el directorio (`45.134.213.215`, 6 líneas el 16/10) se **sustituye por la del CERT**, `203.0.113.77`.
+- Se **eliminan** todas las líneas de `/<MUESTRA_EXCLUIDA>`.
+- La IP real de quien copió el directorio (`<IP_COPIA_REAL>`, 6 líneas el 16/10) se **sustituye por la del CERT**, `203.0.113.77`.
 - Se recorta en la hora en que el CERT lo copió: 16/10 08:37 UTC, igual que en el real.
 
 ## Evidencias que se entregan
@@ -267,7 +267,7 @@ INT01/
 - **PCAP del IDS**: solo la sesión `int01 → 104.234.26.225:8084` del 04/10. Lleva el saludo de 40 bytes en claro y los primeros KB de la fase 3. La fase 3 se genera como un buffer ficticio cifrado con XOR `0x99`; al descifrarlo, debe empezar por una cabecera reconocible, pero **no** ser código real. Una alerta de Suricata en `ids01` por "TCP saliente a puerto no estándar con *payload* de alta entropía" justifica que exista la captura.
 - **`mirth.log`**: arranques del servicio, tráfico normal de canales y, el 04/10, las peticiones del atacante con la traza de la excepción de XStream. El builder debe ajustar la ruta de la API y la forma de la traza a la descripción técnica pública de CVE-2023-43208 (Horizon3.ai) y comprobar que el proceso padre de los hijos de Mirth en Windows es el correcto (por ejemplo, `mcservice.exe` frente a `java.exe`).
 - **Aviso del CERT**: correo breve en español, con la IP pública de Kelbrook, la URL del *open directory*, la hora en que se copió y una petición de investigar. No da más pistas.
-- **`index.html`**: listado al estilo del `http.server` de Python con `OneDrive.exe`, `client64.exe`, `run.ps1`, `run2.ps1`, `bootstrap_enc.txt`, `server.py` y `access.log`, con tamaños y fechas coherentes. Sin `sysupdate`. `server.py` y `bootstrap_enc.txt` aparecen solo por nombre, porque no se analizaron.
+- **`index.html`**: listado al estilo del `http.server` de Python con `OneDrive.exe`, `client64.exe`, `run.ps1`, `run2.ps1`, `bootstrap_enc.txt`, `server.py` y `access.log`, con tamaños y fechas coherentes. Sin `<MUESTRA_EXCLUIDA>`. `server.py` y `bootstrap_enc.txt` aparecen solo por nombre, porque no se analizaron.
 
 ## Mapa ATT&CK
 

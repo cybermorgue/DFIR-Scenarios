@@ -7,13 +7,15 @@ de XStream ocurre antes de la autenticación); no contienen carga alguna.
 import random
 
 from .const import OP_IP, TRIAGE_T
+from .kape import is_dst
 from .winfmt import ft2dt, sec
 
 BUILT = "September 14, 2023"
 
 
 def _ln(ft, level, thread, logger, msg):
-    d = ft2dt(ft)
+    """Línea de log4j en la hora local del servidor (CEST): la JVM no escribe en UTC."""
+    d = ft2dt(ft + (sec(7200) if is_dst(ft) else sec(3600)))
     return f"{level:<5} {d.strftime('%Y-%m-%d %H:%M:%S')},{d.microsecond // 1000:03d} [{thread}] {logger}: {msg}"
 
 
@@ -41,7 +43,8 @@ def _trace(ft, thread):
         "\tat java.base/java.lang.Thread.run(Unknown Source)"])
 
 
-def mirth_log(sim):
+def mirth_entries(sim):
+    """[(ft, texto)] ordenado y cortado en el triage; mirth_log lo junta y la rotación se hace por ft."""
     rng = random.Random(4404)
     ev = []
     for b in sim.boots:
@@ -67,7 +70,11 @@ def mirth_log(sim):
             t = c.start + sec(0.8)      # la orden ya se ha lanzado cuando falla la conversión
             ev.append((t, _trace(t, th)))
     ev.sort(key=lambda e: e[0])
-    return "\n".join(e[1] for e in ev if e[0] <= TRIAGE_T) + "\n"
+    return [e for e in ev if e[0] <= TRIAGE_T]
+
+
+def mirth_log(sim):
+    return "\n".join(t for _, t in mirth_entries(sim)) + "\n"
 
 
 def mirth_properties():

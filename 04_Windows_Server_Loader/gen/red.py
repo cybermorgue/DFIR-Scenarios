@@ -56,8 +56,8 @@ def _frame(src, dst, sport, dport, seq, ack, flags, payload=b"", options=b"", ip
 
 
 def ids_pcap(conn, handshake, stage3_head):
-    """Sesión int01 -> :8084 guardada por Suricata: tres vías, saludo de 40 bytes, la cabecera de la fase 3 y cierre."""
-    SYN, ACK, PSH, FIN = 0x02, 0x10, 0x08, 0x01
+    """Sesión int01 -> :8084 guardada por Suricata: tres vías, saludo de 40 bytes y los primeros KB de la fase 3 (sin cierre)."""
+    SYN, ACK, PSH = 0x02, 0x10, 0x08
     c_ip, s_ip, cp, sp = conn.src, conn.dst, conn.sport, conn.dport
     c_seq, s_seq = 0x2A4F9C11, 0x7B3E01D5
     t0 = ft2unix(conn.start)
@@ -89,10 +89,7 @@ def ids_pcap(conn, handshake, stage3_head):
         s_seq += len(chunk)
         if n % 2 == 0:
             put(t + rtt, True, seq=c_seq, ack=s_seq, flags=ACK)
-    t += rtt + 0.0004
-    put(t, True, seq=c_seq, ack=s_seq, flags=FIN | ACK)
-    put(t + rtt, False, seq=s_seq, ack=c_seq + 1, flags=FIN | ACK)
-    put(t + rtt + 0.0002, True, seq=c_seq + 1, ack=s_seq + 1, flags=ACK)
+    # Suricata guarda solo el comienzo del flujo (profundidad de reensamblado): la captura termina sin cierre
     out = bytearray(struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1))
     for ts, data in pk:
         sec_, us = divmod(int(round(ts * 1_000_000)), 1_000_000)

@@ -12,11 +12,11 @@ from gen.const import BASE, OP_IP, START_T, TRIAGE_T
 from gen.hives import HIVE_COPY, INSTALL, build_amcache, build_software, build_system
 from gen.intel import access_log, aviso_cert_eml, ficha_muestras, index_html
 from gen.kape import evtx_files, kape_zip
-from gen.mirth import mirth_log, mirth_properties
+from gen.mirth import mirth_entries, mirth_properties
 from gen.red import fw01_log, ids_pcap
 from gen.sim import CH, Sim
 from gen.timeline import attack, background, triage_session
-from gen.winfmt import T, sec
+from gen.winfmt import FT, T, sec
 
 OPENDIR = f"opendir_{OP_IP}_8090"
 
@@ -36,11 +36,13 @@ def triage_files(sim):
     t0 = TRIAGE_T + sec(50.0)
     for i, p in enumerate(sorted(files)):
         deferred[p] = t0 + sec(i * 6.3)
-    mirth = mirth_log(sim).splitlines(keepends=True)
-    cut = next(i for i, l in enumerate(mirth) if l[:16] >= "INFO  2026-10-03" or l[6:16] >= "2026-10-03")
+    corte = FT(2026, 10, 3)               # rotación: lo anterior queda en mirth.log.1
+    entradas = mirth_entries(sim)
+    viejo = "".join(t + "\n" for ft, t in entradas if ft < corte)
+    actual = "".join(t + "\n" for ft, t in entradas if ft >= corte)
     base = "C/Program Files/Mirth Connect/"
-    files[base + "logs/mirth.log.1"] = ("".join(mirth[:cut]).encode(), INSTALL + sec(5400), T(3, 6, 12, 40.0))
-    files[base + "logs/mirth.log"] = ("".join(mirth[cut:]).encode(), T(3, 6, 12, 41.0), TRIAGE_T - sec(3600))
+    files[base + "logs/mirth.log.1"] = (viejo.encode(), INSTALL + sec(5400), T(3, 0, 0, 2.0))
+    files[base + "logs/mirth.log"] = (actual.encode(), T(3, 0, 0, 2.0), TRIAGE_T - sec(3600))
     files[base + "conf/mirth.properties"] = (mirth_properties().encode(), INSTALL + sec(5400), INSTALL + sec(5400))
     cfg = "C/Windows/System32/config/"
     hives = {cfg + "SYSTEM": (build_system(sim), INSTALL, T(13, 8, 31, 21.0), HIVE_COPY["SYSTEM"]),

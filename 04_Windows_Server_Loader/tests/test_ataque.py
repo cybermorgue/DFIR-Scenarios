@@ -116,3 +116,10 @@ def test_servicio_instalado(run):
     sim, _ = run
     e = [f(x) for x in sim.ev["System"] if x.eid == 7045]
     assert len(e) == 1 and e[0]["ImagePath"] == ONESYNC
+
+
+def test_sysmon7_de_winpty_dll_sin_firma(run):
+    """La regla de Sysmon 7 (DLL sin firma o desde Temp) captura exactamente esta carga."""
+    sim, _ = run
+    l = [f(e) for e in sim.ev["Sysmon"] if e.eid == 7 and f(e)["ImageLoaded"].endswith("winpty.dll")]
+    assert len(l) == 1 and l[0]["Image"] == ONEDRIVE and l[0]["Signed"] == "false"

@@ -157,6 +157,7 @@ class Sim:
     def boot(self, t):
         """Arranque en frío de Server 2019: procesos base, servicios, Sysmon y Mirth."""
         self.boot_t = t
+        self.pids = set()            # cada arranque tiene su propio espacio de PIDs
         self.procs = {}
         self.running = []
         b = {"t": t, "audit": t + sec(4.2), "sysmon": t + sec(6.8), "end": None, "procs": self.procs,

@@ -107,3 +107,13 @@ def test_eventos_del_primer_arranque_usan_su_ventana():
     sim.service_install(t, "OneSyncHost", "OneDrive Sync Host", r"C:\x\a.exe", "auto start", "LocalSystem")
     e7045 = [e for e in sim.ev["System"] if e.eid == 7045][0]
     assert e7045.pid == first["procs"]["services"].pid
+
+
+def test_pids_se_reinician_con_cada_arranque():
+    sim = Sim()
+    sim.boot(T(1, 6, 0, 0.0))
+    for i in range(200):
+        sim.spawn(T(1, 7, 0, i * 1.0), CMD, "cmd.exe", sim.procs["mcservice"], "system", log=False)
+    sim.shutdown(T(13, 8, 31, 0.0), "system", "Otro (planeado)")
+    sim.boot(T(13, 8, 33, 0.0))
+    assert len(sim.pids) < 40

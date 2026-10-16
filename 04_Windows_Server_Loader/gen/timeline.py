@@ -3,7 +3,7 @@ import os
 import re
 
 from . import payloads
-from .const import (ARDEAL_IP, BUCKET_HOST, BUCKET_IP, CMD, DOMAIN, FQDN, FUENTES, HOLIDAYS, HOST, JTORRES_SID,
+from .const import (DC_IP, DOMAIN_SID, ARDEAL_IP, BUCKET_HOST, BUCKET_IP, CMD, DOMAIN, FQDN, FUENTES, HOLIDAYS, HOST, JTORRES_SID,
                     JTORRES_WS_IP, KB_PUBLIC, MCSERVICE, MS_UPDATE_IP, NAS_IP, ONEDRIVE, ONESYNC, OP_IP,
                     POWERSHELL, REBOOT_T, TRIAGE_T, USERS, WINPTY_AGENT, WINPTY_DIR, WINPTY_DLL, sample)
 from .sim import GUIDS
@@ -152,6 +152,58 @@ def system_noise(sim, t):
                     ch="Application", esn="Microsoft-Windows-Security-SPP", qual=16384, kw=0x80000000000000)
 
 
+def server_noise(sim, day_t):
+    """Actividad propia de un servidor de dominio en marcha: logons de red de dc01, monitor de Mirth por WMI,
+    consultas DNS de los servicios y cambios de estado de servicios."""
+    rng = sim.rng
+    procs = sim.procs_at(day_t + sec(3600))
+    svc = procs.get("services")
+    if svc is None:
+        return
+    machine = DOMAIN_SID + "-1001"
+    for _ in range(rng.randint(70, 110)):
+        t = day_t + sec(rng.uniform(0, 86400))
+        if not sim.boot_at(t):
+            continue
+        lid = rng.randrange(0x400000, 0xFFFFFF)
+        sim.sec(t, 4624, 12544, [
+            ("SubjectUserSid", S.SID, "S-1-0-0"), ("SubjectUserName", S.STR, "-"), ("SubjectDomainName", S.STR, "-"),
+            ("SubjectLogonId", S.HEX64, 0), ("TargetUserSid", S.SID, machine), ("TargetUserName", S.STR, "DC01$"),
+            ("TargetDomainName", S.STR, DOMAIN), ("TargetLogonId", S.HEX64, lid), ("LogonType", S.U32, 3),
+            ("LogonProcessName", S.STR, "Kerberos"), ("AuthenticationPackageName", S.STR, "Kerberos"),
+            ("WorkstationName", S.STR, "-"), ("LogonGuid", S.GUID, sim.logon_guid(t, lid)),
+            ("TransmittedServices", S.STR, "-"), ("LmPackageName", S.STR, "-"), ("KeyLength", S.U32, 0),
+            ("ProcessId", S.HEX64, 0), ("ProcessName", S.STR, "-"), ("IpAddress", S.STR, DC_IP),
+            ("IpPort", S.STR, str(rng.randint(49152, 65000))), ("ImpersonationLevel", S.STR, "%%1833"),
+            ("RestrictedAdminMode", S.STR, "-"), ("TargetOutboundUserName", S.STR, "-"),
+            ("TargetOutboundDomainName", S.STR, "-"), ("VirtualAccount", S.STR, "%%1843"),
+            ("TargetLinkedLogonId", S.HEX64, 0), ("ElevatedToken", S.STR, "%%1843")], ver=2)
+        sim.sec(t + sec(rng.uniform(1, 40)), 4634, 12545, [
+            ("TargetUserSid", S.SID, machine), ("TargetUserName", S.STR, "DC01$"), ("TargetDomainName", S.STR, DOMAIN),
+            ("TargetLogonId", S.HEX64, lid), ("LogonType", S.U32, 3)])
+    wmi_parent = procs.get("svc_dcom", svc)
+    for _ in range(rng.randint(55, 85)):
+        t = day_t + sec(rng.uniform(0, 86400))
+        if sim.boot_at(t):
+            p = sim.spawn(t, r"C:\Windows\System32\wbem\WmiPrvSE.exe", r"C:\Windows\system32\wbem\wmiprvse.exe -secured -Embedding",
+                          wmi_parent, "network", life=rng.uniform(3, 40))
+    mc = procs.get("mcservice")
+    for _ in range(rng.randint(25, 45)):
+        t = day_t + sec(rng.uniform(0, 86400))
+        if mc and sim.boot_at(t):
+            sim.dns(t, mc, rng.choice(("dc01.kelbrook.internal", "ocsp.digicert.com", "time.windows.com")),
+                    [DC_IP] if rng.random() < 0.5 else [MS_UPDATE_IP])
+    for _ in range(rng.randint(3, 7)):
+        t = day_t + sec(rng.uniform(0, 86400))
+        if sim.boot_at(t):
+            name = rng.choice(("Servicio de transferencia inteligente en segundo plano (BITS)", "Telemetría de experiencias del usuario conectado y telemetría",
+                               "Servicio de Windows Update", "Servicio de plataforma de protección de software"))
+            sim.sys(t, "Service Control Manager", 7036, [("param1", S.STR, name), ("param2", S.STR, rng.choice(("en ejecución", "detenido"))),
+                                                          ("Binary", S.BIN, name.encode("utf-16-le")[:16])],
+                    guid=GUIDS["Service Control Manager"], esn="Service Control Manager", qual=16384,
+                    kw=0x8080000000000000, pid=svc.pid)
+
+
 def internet_noise(sim, day_t):
     rng = sim.rng
     pool = _scanners(rng)
@@ -195,6 +247,7 @@ def background(sim, t0, t1):
             nightly_backup(sim, day + sec(1.5 * 3600 + sim.rng.uniform(0, 120)))
         if sim.boot_at(day):
             system_noise(sim, day + sec(2 * 3600))
+        server_noise(sim, day)
         if d.weekday() == 1:
             visit = day + sec(8 * 3600 + 15 * 60 + sim.rng.uniform(-600, 600))
             is_reboot_day = day <= REBOOT_T < day + sec(86400)
@@ -348,6 +401,7 @@ def attack(sim):
     for path, dt in ((WINPTY_DLL, 0.2), (WINPTY_AGENT, 0.26)):
         sim.fcreate(t_w + sec(dt), od, path, sample(path)["size"])
         sim.fexe(t_w + sec(dt + 0.02), od, path)
+    sim.image_load(t_w + sec(0.6), od, WINPTY_DLL, signed=False)
     agent = sim.spawn(t_w + sec(1.1), WINPTY_AGENT,
                       f'"{WINPTY_AGENT}" \\\\.\\pipe\\winpty-control-{od.pid}-1 1 120 30', od, "system", cwd=WINPTY_DIR + "\\")
     sim.console(t_w + sec(1.1), agent)
