@@ -1,0 +1,26 @@
+From:
+ CERT de =?utf-8?q?coordinaci=C3=B3n?= <incidentes@cert-coordinacion.example>
+To: seguridad@kelbrook.example
+Subject: Aviso: posible compromiso en 192.0.2.25
+Date: Mon, 19 Oct 2026 09:10:00 +0200
+Message-ID: <20261019091000.4f2a@cert-coordinacion.example>
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+Buenos d=C3=ADas:
+
+Durante la revisi=C3=B3n de un servidor expuesto en Internet (104.234.26.225)=
+ hemos encontrado un directorio abierto en http://104.234.26.225:8090/ con un=
+ registro de accesos (access.log). Lo copiamos el 16/10/2026 entre las 08:36 =
+y las 08:37 UTC desde 203.0.113.77.
+
+En ese registro aparece la direcci=C3=B3n p=C3=BAblica 192.0.2.25, que seg=C3=
+=BAn WHOIS pertenece a su organizaci=C3=B3n, realizando peticiones al servido=
+r el 04/10/2026 a partir de las 18:53 UTC.
+
+Les rogamos que investiguen el equipo asociado a esa direcci=C3=B3n y nos con=
+firmen si procede.
+
+Un saludo,
+CERT de coordinaci=C3=B3n
