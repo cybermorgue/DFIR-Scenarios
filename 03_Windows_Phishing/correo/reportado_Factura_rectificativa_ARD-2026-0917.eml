@@ -1,0 +1,163 @@
+Received: from PAXPR04MB9010.eurprd04.prod.outlook.com (2001:db8:10a6:102:28d::12) by
+ AS8PR04MB8644.eurprd04.prod.outlook.com with HTTPS; Tue, 13 Oct 2026 07:14:24
+ +0000
+Received: from DU7P251CA0012.EURP251.PROD.OUTLOOK.COM (2001:db8:10a6:10:4d8::9)
+ by PAXPR04MB9010.eurprd04.prod.outlook.com (2001:db8:10a6:102:28d::12) with
+ Microsoft SMTP Server (version=TLS1_2,
+ cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.20.9182.24; Tue, 13 Oct
+ 2026 07:14:23 +0000
+Received: from DU2PEPF00028D0B.eurprd03.prod.outlook.com
+ (2001:db8:10a6:10:4d8:cafe::7c) by DU7P251CA0012.outlook.office365.com
+ (2001:db8:10a6:10:4d8::9) with Microsoft SMTP Server (version=TLS1_3,
+ cipher=TLS_AES_256_GCM_SHA384) id 15.20.9182.24 via Frontend Transport; Tue,
+ 13 Oct 2026 07:14:23 +0000
+Authentication-Results: spf=pass (sender IP is 198.51.100.89)
+ smtp.mailfrom=ardeal-lab.net; dkim=pass (signature was verified)
+ header.d=ardeal-lab.net;dmarc=pass action=none
+ header.from=ardeal-lab.net;compauth=pass reason=100
+Received-SPF: Pass (protection.outlook.com: domain of ardeal-lab.net designates
+ 198.51.100.89 as permitted sender) receiver=protection.outlook.com;
+ client-ip=198.51.100.89; helo=mail.ardeal-lab.net; pr=C
+Received: from mail.ardeal-lab.net (198.51.100.89) by
+ DU2PEPF00028D0B.mail.protection.outlook.com (2001:db8:10a6:10:4d8:cafe::7c)
+ with Microsoft SMTP Server (version=TLS1_3, cipher=TLS_AES_256_GCM_SHA384) id
+ 15.20.9182.24 via Frontend Transport; Tue, 13 Oct 2026 07:14:22 +0000
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=ardeal-lab.net;
+	s=mail; t=1791875658;
+	bh=Wm9vbVhxN2VhR3ZNZ0pqUmZ0b3p1Q2xzS0hMd0tqWVE9;
+	h=Date:To:From:Subject:From;
+	b=k3Q9mZpVn2JfX8rT1cL5wY0hD7aG4sB6eN3uI9oP2qR5tK8vM1xC4zF7jH0lW3yE6bA9dS2gU5i
+	 Ox8nR1pT4vQ7sY0wZ3cB6eF9hK2mN5qL8tJ1uX4aD7gG0jI3lM6oP9rS2vU5yW8bA1dE4hH7kK0n
+	 Q3tT6wZ9cF2iL5oR8uX1aD4gJ7mP0sV3yB6eH9kN2qT5wZ8c=
+Received: from [192.168.1.37] (unknown [203.0.113.201])
+	(Authenticated sender: administracion@ardeal-lab.net)
+	by mail.ardeal-lab.net (Postfix) with ESMTPSA id 4F1A2C0D3E
+	for <lmarin@kelbrook-medical.net>; Tue, 13 Oct 2026 07:14:18 +0000 (UTC)
+Message-ID: <20261013071418.4F1A2C0D3E@mail.ardeal-lab.net>
+Date: Tue, 13 Oct 2026 09:14:18 +0200
+MIME-Version: 1.0
+User-Agent: Mozilla Thunderbird
+Content-Language: es-ES
+To: =?UTF-8?Q?Luc=C3=ADa_Mar=C3=ADn?= <lmarin@kelbrook-medical.net>
+From: =?UTF-8?Q?Administraci=C3=B3n_Laboratorios_Ardeal?= <administracion@ardeal-lab.net>
+Subject: =?UTF-8?Q?Factura_rectificativa_ARD-2026-0917_-_conciliaci=C3=B3n_septiembre?=
+Content-Type: multipart/mixed; boundary="------------Kq3Zr0Vx7Tn2Lm5Pa8Wd1Ys4"
+Return-Path: administracion@ardeal-lab.net
+X-MS-Exchange-Organization-ExpirationStartTime: 13 Oct 2026 07:14:23.0154
+ (UTC)
+X-MS-Exchange-Organization-ExpirationStartTimeReason: OriginalSubmit
+X-MS-Exchange-Organization-ExpirationInterval: 1:00:00:00.0000000
+X-MS-Exchange-Organization-ExpirationIntervalReason: OriginalSubmit
+X-MS-Exchange-Organization-Network-Message-Id: 3d7c1f9a-58e2-4b06-a1c4-7e9f2d6b0835
+X-EOPAttributedMessage: 0
+X-EOPTenantAttributedMessage: 7c1e9a52-3b4d-4f60-8e2a-91d5c0b7f3a4:0
+X-MS-Exchange-Organization-MessageDirectionality: Incoming
+X-MS-PublicTrafficType: Email
+X-MS-TrafficTypeDiagnostic: DU2PEPF00028D0B:EE_|PAXPR04MB9010:EE_|AS8PR04MB8644:EE_
+X-MS-Exchange-Organization-AuthSource: DU2PEPF00028D0B.eurprd03.prod.outlook.com
+X-MS-Exchange-Organization-AuthAs: Anonymous
+X-MS-Office365-Filtering-Correlation-Id: 3d7c1f9a-58e2-4b06-a1c4-7e9f2d6b0835
+X-MS-Exchange-Organization-SCL: 1
+X-Microsoft-Antispam: BCL:0;ARA:13230040|4022899009|2066899003|43062017|8096899003;
+X-Forefront-Antispam-Report: CIP:198.51.100.89;CTRY:NL;LANG:es;SCL:1;SRV:;IPV:NLI;SFV:NSPM;H:mail.ardeal-lab.net;PTR:mail.ardeal-lab.net;CAT:NONE;SFS:(13230040)(4022899009)(2066899003)(43062017)(8096899003);DIR:INB;
+X-MS-Exchange-CrossTenant-OriginalArrivalTime: 13 Oct 2026 07:14:22.8125
+ (UTC)
+X-MS-Exchange-CrossTenant-Network-Message-Id: 3d7c1f9a-58e2-4b06-a1c4-7e9f2d6b0835
+X-MS-Exchange-CrossTenant-Id: 7c1e9a52-3b4d-4f60-8e2a-91d5c0b7f3a4
+X-MS-Exchange-CrossTenant-AuthSource: DU2PEPF00028D0B.eurprd03.prod.outlook.com
+X-MS-Exchange-CrossTenant-AuthAs: Anonymous
+X-MS-Exchange-CrossTenant-FromEntityHeader: Internet
+X-MS-Exchange-Transport-CrossTenantHeadersStamped: PAXPR04MB9010
+X-MS-Exchange-Transport-EndToEndLatency: 00:00:02.1180428
+X-MS-Exchange-Processed-By-BccFoldering: 15.20.9182.020
+X-Microsoft-Antispam-Mailbox-Delivery: ucf:0;jmr:0;auth:0;dest:I;ENG:(910005)(944506478)(944626604)(920097)(930097)(140003);
+X-Microsoft-Antispam-Message-Info: dGhpcyBpcyBzeW50aGV0aWMgZGF0YSBmb3IgYSBERklSIHRyYWluaW5nIHNjZW5hcmlvIC0ga2VsYnJvb2sgMDM=
+
+This is a multi-part message in MIME format.
+--------------Kq3Zr0Vx7Tn2Lm5Pa8Wd1Ys4
+Content-Type: multipart/alternative;
+ boundary="------------Jf6Hc9Bu2Ne5Rg8Ti1Ok4Mw7"
+
+--------------Jf6Hc9Bu2Ne5Rg8Ti1Ok4Mw7
+Content-Type: text/plain; charset=UTF-8; format=flowed
+Content-Transfer-Encoding: quoted-printable
+
+Buenos d=C3=ADas, Luc=C3=ADa:
+
+Tal y como comentamos en la conciliaci=C3=B3n, le adjunto la factura rectif=
+icativa ARD-2026-0917 correspondiente a las anal=C3=ADticas de septiembre, =
+con el ajuste aplicado. Le agradecer=C3=ADa que la revisara antes del cierr=
+e del jueves.
+
+Un saludo,
+
+--=20
+Javier Ruiz Ortega
+Administraci=C3=B3n =C2=B7 Laboratorios Ardeal
+C/ de la Ciencia 14, 28000 Madrid =C2=B7 Tel. +34 910 000 472
+administracion@ardeal-labs.net =C2=B7 www.ardeal-labs.net
+
+--------------Jf6Hc9Bu2Ne5Rg8Ti1Ok4Mw7
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv=3D"content-type" content=3D"text/html; charset=3DUTF-8=
+">
+  </head>
+  <body>
+<p>Buenos d=C3=ADas, Luc=C3=ADa:</p>
+<p>Tal y como comentamos en la conciliaci=C3=B3n, le adjunto la factura rec=
+tificativa ARD-2026-0917 correspondiente a las anal=C3=ADticas de septiembr=
+e, con el ajuste aplicado. Le agradecer=C3=ADa que la revisara antes del ci=
+erre del jueves.</p>
+<p>Un saludo,</p>
+    <div class=3D"moz-signature">-- <br>
+Javier Ruiz Ortega<br>
+Administraci=C3=B3n =C2=B7 Laboratorios Ardeal<br>
+C/ de la Ciencia 14, 28000 Madrid =C2=B7 Tel. +34 910 000 472<br>
+administracion@ardeal-labs.net =C2=B7 www.ardeal-labs.net</div>
+  </body>
+</html>
+
+--------------Jf6Hc9Bu2Ne5Rg8Ti1Ok4Mw7--
+--------------Kq3Zr0Vx7Tn2Lm5Pa8Wd1Ys4
+Content-Type: application/x-zip-compressed; name="Factura_ARD-2026-0917.zip"
+Content-Disposition: attachment; filename="Factura_ARD-2026-0917.zip"
+Content-Transfer-Encoding: base64
+
+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
+
+--------------Kq3Zr0Vx7Tn2Lm5Pa8Wd1Ys4--
