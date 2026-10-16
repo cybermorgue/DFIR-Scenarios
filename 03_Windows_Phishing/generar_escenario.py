@@ -293,7 +293,7 @@ class _Chunk:
     def try_add(self, ev):
         snap = (dict(self.names), list(self.str_table), dict(self.templates), list(self.tpl_table))
         rec, _ = self.record_bytes(ev)
-        if len(self.buf) + len(rec) > self.SIZE:
+        if len(self.buf) + len(rec) > self.SIZE - 8:        # libevtx descarta un registro que acaba en el último byte
             self.names, self.str_table, self.templates, self.tpl_table = snap
             return False
         self.last_off = len(self.buf)
@@ -2973,7 +2973,14 @@ def kape_package(sim):
     files[r"C:\Users\adm.jtorres\AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt"] = (
         JTORRES_PSHIST.replace("\n", "\r\n").encode("utf-8"), INSTALL + sec(1790), LOCAL(6, 18, 11, 37, 4), T(13, 10, 10, 23.0), False)
     order = sorted(files.items(), key=lambda kv: (kv[1][4], kv[1][3], kv[0].lower()))
-    return files, order
+    # Las copias normales salen una tras otra, con unos milisegundos entre fichero y fichero
+    out, prev = [], None
+    for p, (d, c, m, ct, deferred) in order:
+        if not deferred and prev is not None and ct <= prev:
+            ct = prev + sec(0.004 + len(d) / 4e7)
+        prev = ct
+        out.append((p, (d, c, m, ct, deferred)))
+    return files, out
 
 
 def write_outputs(sim):
@@ -3036,7 +3043,7 @@ def write_outputs(sim):
             dt_local = ft2dt(m + (sec(7200) if is_dst(m) else sec(3600)))
             zi = zipfile.ZipInfo(rel, date_time=dt_local.timetuple()[:6])
             zi.create_system = 0
-            zi.extra = ntfs_extra(m, a, c)
+            zi.extra = ntfs_extra(m, a, c) + struct.pack("<HHBI", 0x5455, 5, 1, int(ft2unix(m)))
             if d is None:
                 zi.external_attr = 0x10
                 z.writestr(zi, b"")

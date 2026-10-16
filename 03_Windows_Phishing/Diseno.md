@@ -3,7 +3,7 @@ tags:
   - DFIR/Simulacion
   - DFIR/Windows
   - DFIR/Email
-estado: borrador fase 1
+estado: fase 2 (generador hecho)
 ---
 
 # Diseño — Escenario 03: spear phishing contra facturación
@@ -58,16 +58,21 @@ Configuración relevante del puesto:
 
 Las horas van en **UTC**, con la hora local entre paréntesis cuando ayuda. El día del ataque es el **martes 13/10/2026**.
 
-### Días anteriores (ruido de fondo, 05/10 → 12/10)
+### Días anteriores (ruido de fondo, 16/03 → 09/10)
+
+El generador simula el equipo desde su instalación (16/03/2026) para que los logs y artefactos tengan la historia que tendrían de verdad.
 
 | Fecha | Evento | Dónde se ve |
 | --- | --- | --- |
-| Días laborables | El equipo arranca entre 06:35 y 06:50 y Lucía inicia sesión. Se apaga entre 15:30 y 16:10 | Security 4624/4634/4647, System 6005/6006/12/13 |
+| 16/03 | Instalación y preparación por `adm.jtorres` (primer inicio de sesión, perfil, PSReadLine) | SOFTWARE (`InstallDate`), ProfileList, primeros registros de System/Application |
+| Días laborables | El equipo arranca entre 08:30 y 08:50 hora local y Lucía inicia sesión. El script de la GPO (`mapear_unidades.ps1`) monta `F:` (`\\fs01\Facturacion`) y `H:`. Apaga hacia las 17:30–18:00 (los viernes, antes). Vacaciones del 29/06 al 03/07 y del 03/08 al 21/08, y festivos nacionales sin actividad | Security 4624/4634/4647, System 12/13/6005/6006/1074, PowerShell 400/600/4104 del script de la GPO |
 | 05/10 08:02 | **Correo legítimo** de Ardeal con la factura ARD-2026-0884 de agosto. Lucía abre el PDF adjunto desde Outlook, que lo guarda en la misma carpeta `Content.Outlook\K7Q2ZP1M\` | `.eml` de referencia, LNK en Recent, Edge (visita `file:///`) |
-| 06/10 – 09/10 | Excel y PDF del recurso `\\fs01\Facturacion`, Teams, Outlook y navegación (intranet, banca, AEAT) | Recent LNK, Prefetch, historial de Edge |
-| 08/10 13:10 | Actualización acumulativa de Windows y reinicio | System (WindowsUpdateClient 19/43/44, 1074, 6006/6005), SOFTWARE (UBR) |
+| A diario | Excel y PDF de `F:` (conciliaciones, remesas, facturas), Teams, Outlook y navegación (intranet, banca, AEAT, búsquedas) | Recent LNK, RecentDocs, UserAssist, Prefetch, historial de Edge (solo los últimos 90 días) |
+| Mensual | Actualizaciones acumulativas con reinicio (la última, el 08/10 hacia las 13:10 UTC, deja la build en 26100.6899) | System (WindowsUpdateClient 44/43/19, 1074 de MoUsoCoreWorker), SOFTWARE (`UBR`) |
+| 01/10 | La GPO de inicio instala Sysmon (`instalar_sysmon.cmd`) | System 7045 (`SysmonDrv`, `Sysmon64`), Sysmon 4 y 16, Security 4688 |
 | A diario | Actualización de firmas de Defender, escaneo rápido programado, OneDrive y tareas programadas | Defender 2000/1000/1001, Sysmon, Prefetch |
-| 12/10 ~09:00 | El log de Sysmon (64 MB) se llena y empieza a sobrescribir lo más antiguo. Su primer registro es de esa mañana; Security, System y el resto conservan desde el 05/10 | Primer registro de cada EVTX |
+| 09/10 | Último apagado antes del ataque (12/10 es festivo y el equipo no se enciende) | SYSTEM `ShutdownTime`, ShimCache |
+| Retención | Security (20 MB, con 4688 de todos los procesos) está lleno y ha dado la vuelta: conserva desde el 07/05. Sysmon empieza el 01/10, cuando se instaló. System, Application, PowerShell y Defender conservan desde la instalación | Primer registro de cada EVTX |
 
 ### 13/10, día del ataque
 
@@ -76,7 +81,7 @@ Las horas van en **UTC**, con la hora local entre paréntesis cuando ayuda. El d
 | 06:41:07 (08:41) | Arranque del equipo | System 12/6005/6009, Sysmon (procesos de arranque) |
 | 06:43:52 (08:43) | Lucía inicia sesión (tipo 2, Kerberos) | Security 4624, Sysmon 1 (`userinit`, `explorer`) |
 | 06:44 – 06:47 | OneDrive (Run legítimo), Teams, Outlook y Edge | Sysmon 1, Prefetch |
-| 07:02:30 (09:02) | Lucía abre `\\fs01\Facturacion\Conciliaciones\Conciliacion_Ardeal_2026-09.xlsx`. Es acceso **legítimo** a `fs01`, y sirve de contraste con el del atacante | Sysmon 1 (EXCEL con la ruta UNC en la línea de comandos), Recent LNK, RecentDocs |
+| 07:02:30 (09:02) | Lucía abre `F:\Conciliaciones\Conciliacion_Ardeal_2026-09.xlsx` (la unidad `F:` es `\\fs01\Facturacion`). Es acceso **legítimo** a `fs01`, y sirve de contraste con el del atacante | Sysmon 1 (EXCEL, padre explorer.exe), Recent LNK (con `\\fs01\Facturacion` y `MachineID` `fs01`), RecentDocs |
 | 07:14:22 (09:14) | Exchange Online recibe el correo malicioso | `.eml` (cabeceras `Received`) |
 | 07:31:05 (09:31) | Lucía abre el adjunto. Outlook guarda `Factura_ARD-2026-0917.zip` en `INetCache\Content.Outlook\K7Q2ZP1M\` con `Zone.Identifier` ZoneId=3 y el Explorador abre el ZIP | Sysmon 11 y 15 (OUTLOOK.EXE), NTUSER `OutlookSecureTempFolder`, Recent `Factura_ARD-2026-0917.zip.lnk`, RecentDocs `.zip` |
 | 07:31:19 | Doble clic en `Factura_ARD-2026-0917.pdf.lnk`. El Explorador lo extrae a `%TEMP%\Temp1_Factura_ARD-2026-0917.zip\` y lo ejecuta | Sysmon 11 (explorer.exe) |
@@ -106,7 +111,8 @@ Las horas van en **UTC**, con la hora local entre paréntesis cuando ayuda. El d
 | 09:52:33 (11:52) | IT desenchufa el cable de red | System 27 (driver Intel I219-LM, *link is disconnected*), NCSI. Desde ahí los Sysmon 22 de OneDriveUpdater.exe registran fallos y desaparecen los Sysmon 3 |
 | 10:06:15 (12:06) | Jorge Torres cambia de usuario e inicia sesión como `adm.jtorres` (tipo 2). La sesión de Lucía queda abierta | Security 4624 y 4672 |
 | 10:08:40 | Pincha un USB SanDisk Cruzer, montado como `E:` | SYSTEM: `USBSTOR`, `MountedDevices` |
-| 10:10:15 (12:10) | Lanza `E:\KAPE\kape.exe --tsource C: --tdest E:\triage\KB-FIN-WS03 --target KB-Triage` como administrador | Sysmon 1, 4688, Prefetch `KAPE.EXE`, Amcache (ruta en `E:`), ConsoleLog de KAPE |
+| 10:09:54 – 10:09:58 | Abre un `cmd.exe` elevado (UAC con `consent.exe`) | Sysmon 1 (High), 4688 con `%%1937` y el LogonId elevado, Prefetch `CMD.EXE` y `CONSENT.EXE`, UserAssist de `adm.jtorres` |
+| 10:10:15 (12:10) | Desde ese `cmd.exe` lanza `E:\KAPE\kape.exe --tsource C: --tdest E:\triage\KB-FIN-WS03 --target KB-Triage` | Sysmon 1, 4688, Amcache (ruta en `E:`), ConsoleLog y CopyLog de KAPE. **No** hay Prefetch de `KAPE.EXE`: Windows lo escribe unos 10 s después del arranque y KAPE ya había copiado `C:\Windows\Prefetch` |
 | 10:10:16 → 10:13:50 | KAPE copia los artefactos. Cada EVTX acaba en el último registro anterior a su copia, y la propia recogida aparece en los que se copian más tarde | Últimos registros de cada EVTX, CopyLog |
 
 ### Qué pasa después (fuera de las evidencias)
@@ -139,7 +145,8 @@ El implante sigue vivo pero sin red. IT comprimirá en su equipo la carpeta de K
 El correo legítimo de referencia (05/10) sale del tenant de Microsoft 365 de Ardeal:
 - Su cadena `Received` es interna de `*.prod.outlook.com` y no tiene ningún salto por Postfix.
 - Lleva `DKIM-Signature` con `s=selector1` y `d=ardeal-labs.net`.
-- Lleva `X-MS-Exchange-CrossTenant-*` y `Message-ID` de Outlook (`<AM9PR04MB...@AM9PR04MB....eurprd04.prod.outlook.com>`).
+- Lleva `ARC-Seal` y `ARC-Message-Signature` firmados por `microsoft.com`, las cabeceras propias de Outlook (`Thread-Topic`, `Thread-Index`, `X-MS-Has-Attach`, `X-MS-TNEF-Correlator`) y `Message-ID` de Exchange Online (`<AM9PR04MB...@AM9PR04MB....eurprd04.prod.outlook.com>`). Su `Date:` va en UTC, como lo sella Exchange, mientras que el de Thunderbird va en +0200.
+- Las cabeceras `X-MS-Exchange-CrossTenant-*` aparecen en **los dos** correos: las pone el tenant de Kelbrook al recibir, así que no sirven para distinguirlos.
 - Adjunta un PDF de verdad, `Factura_ARD-2026-0884.pdf`, que es un PDF mínimo con el texto de la factura.
 
 ## El acceso directo
@@ -260,7 +267,10 @@ IT usó un target propio, `KB-Triage.tkape`, que el ConsoleLog cita y que limita
 2. **UTC frente a hora local.** El `Date:` del correo va en +0200 y los `Received` de Exchange en +0000. EVTX, registro, Prefetch y Edge van en UTC, y el ticket y el relato de Lucía en hora local. Quien mezcle las dos se desplaza dos horas.
 3. **El falso OneDrive.** El OneDrive legítimo tiene su propia entrada Run y su actualizador real está en Amcache y Prefetch. Hay que comparar ruta, editor, padre y mecanismo de arranque, no fijarse solo en el nombre.
 4. **El PDF señuelo.** Edge abre un PDF y queda en el historial. No es el malware; sirve para que Lucía crea que «la factura no se abría bien».
-5. **Dos accesos a `fs01`.** Lucía abre la conciliación a las 07:02 desde Excel y el atacante lista y empaqueta las remesas desde `cmd.exe`, hijo del implante. Cuenta el proceso padre, no la ruta.
+5. **Dos accesos a `fs01`.** Lucía abre la conciliación a las 07:02 desde Excel por la unidad `F:` y el atacante lista y empaqueta las remesas por la ruta UNC desde `cmd.exe`, hijo del implante. Cuenta el proceso padre, no el servidor.
+9. **PowerShell legítimo.** Cada inicio de sesión ejecuta `mapear_unidades.ps1` desde la GPO y deja 400/600/4104. Hay que distinguirlo del de las 07:31 por el padre (`gpscript.exe` frente a `explorer.exe`), la línea de comandos y el contenido.
+10. **ShimCache sin implante.** Windows escribe AppCompatCache al apagar, y el equipo no se ha apagado desde el 09/10. Que el implante no esté ahí no prueba nada.
+11. **`CMD.EXE` en Prefetch.** Su última ejecución (10:09:58) es la de Jorge, no la del atacante; las de las 08:48–09:06 están entre las anteriores.
 6. **El equipo de IT.** El inicio de sesión de `adm.jtorres`, el USB, `kape.exe` y su Prefetch y Amcache son de la respuesta. El historial de PowerShell que hay en el triage es de Jorge (comandos de soporte antiguos), no del atacante.
 7. **El historial de PowerShell.** Quien busque el ataque en `ConsoleHost_history.txt` no lo encontrará: `-enc` en una sesión no interactiva no escribe ahí. Lucía ni siquiera tiene ese fichero. La fuente es el 4104 o el 400.
 8. **«Windows 10 Pro».** `SOFTWARE\...\CurrentVersion\ProductName` dice Windows 10 aunque el equipo es Windows 11. Es un comportamiento real de Windows y hay que fiarse de `CurrentBuild` (26100).
@@ -270,7 +280,7 @@ IT usó un target propio, `KB-Triage.tkape`, que el ConsoleLog cita y que limita
 Se copian a `Escenario.md`. La respuesta esperada va entre paréntesis y solo aquí.
 
 1. ¿Qué dirección de remitente usa el correo malicioso y en qué se diferencia del dominio real del proveedor? (`administracion@ardeal-lab.net`; falta la «s» de `ardeal-labs.net`)
-2. SPF, DKIM y DMARC dan *pass*. ¿Por qué eso no demuestra que el correo sea legítimo? Señala al menos dos diferencias de cabeceras con el correo legítimo de referencia. (Autentican el dominio del atacante. Sale de un Postfix en un VPS y no de M365; Thunderbird; Message-ID de Postfix; DKIM con `d=ardeal-lab.net`; no hay cabeceras CrossTenant)
+2. SPF, DKIM y DMARC dan *pass*. ¿Por qué eso no demuestra que el correo sea legítimo? Señala al menos dos diferencias de cabeceras con el correo legítimo de referencia. (Autentican el dominio del atacante. Sale de un Postfix en un VPS y no de M365; Thunderbird frente a Outlook; Message-ID de Postfix; DKIM con `d=ardeal-lab.net` y `s=mail` frente a `selector1`; sin ARC de Microsoft; `Date:` en +0200)
 3. ¿Desde qué IP pública se conectó el remitente a su servidor de correo para enviarlo? (`203.0.113.201`, en el primer `Received`; `192.168.1.37` es su IP privada)
 4. ¿Qué contiene en realidad el adjunto y qué truco usa para pasar por un PDF? (Un ZIP con un `.pdf.lnk`. Windows oculta la extensión `.lnk` y el icono es el de PDF de Edge)
 5. ¿Qué ejecuta el acceso directo? Decodifica el comando y resume paso a paso lo que hace. (PowerShell `-enc`: descarga el señuelo y lo abre, descarga el implante, crea la entrada Run y lo lanza)
@@ -297,16 +307,13 @@ Entregable sugerido:
 - valoración de si hay que notificar a la AEPD (remesas con datos de pacientes);
 - tres recomendaciones.
 
-## Decisiones abiertas para revisar antes de la fase 2
+## Cómo se generan las evidencias (fase 2)
 
-- **EVTX.** Lo escribo yo:
-  - cabecera de fichero, chunks de 64 KB, tablas de cadenas y plantillas, BinXML con *template instances* y CRC32 de cabecera y datos;
-  - proveedores con su nombre y GUID reales (Security-Auditing, Sysmon, PowerShell, Eventlog, Kernel-General…), para que el Visor de eventos renderice los mensajes si el proveedor está instalado;
-  - se valida con libevtx, el crate Rust `evtx` y python-evtx.
-- **Volumen.** Sysmon de un puesto real genera miles de eventos al día. Calculo unos 8 000 a 12 000 en total entre todos los logs, y la semana de ruido de Security, System y Application con un patrón diario creíble.
-- **Prefetch.** Formato de Windows 11 (versión 30 u otra, la que documente libscca para la build 26100), comprimido con MAM (LZXPRESS Huffman) y con el hash de ruta de Windows. Se valida con libscca.
-- **Registro.** Colmenas regf limpias, con secuencias primaria y secundaria iguales y `.LOG1` y `.LOG2` mínimos. Se validan con libregf y regipy. Amcache lleva un subconjunto creíble de `InventoryApplicationFile`, de unas 40 entradas.
-- **Cabeceras de M365.** Los saltos internos de Microsoft usan IPv6. Para respetar la regla de direcciones de documentación van en `2001:db8::/32`, y los nombres de host siguen el formato real (`*.prod.outlook.com`).
-- **Sin red.** No hay PCAP ni logs de cortafuegos o proxy, y la red se ve solo desde el host (Sysmon 3 y 22). Si en la validación se queda corto, se puede añadir un CSV del cortafuegos.
-- **Sin `fs01`.** No hay evidencias del servidor de ficheros. La exfiltración se reconstruye con la línea de comandos y el Prefetch de `tar.exe`.
-- **Validación con herramientas de Windows.** Las EZ Tools (EvtxECmd, RECmd, PECmd, LECmd, AmcacheParser) y Hayabusa no se descargan desde este contenedor. En la fase 3 se te pedirá probar el ZIP en tu máquina.
+- **EVTX.** BinXML propio: cabecera de fichero, chunks de 64 KiB con sus tablas de cadenas y plantillas, una plantilla por proveedor, ID y conjunto de campos, y CRC32 de cabeceras y datos. Proveedores con su nombre y GUID reales. Los ficheros se marcan como sucios, como cualquier log copiado con el servicio en marcha. Cada canal se corta en la hora a la que KAPE lo copió.
+- **Volumen.** Unas 36 700 entradas de Security (se conservan 26 700 tras la vuelta), 4 900 de Sysmon, 5 000 de System y el resto en Application, PowerShell y Defender. Unos 500 eventos de Sysmon por día laborable.
+- **Prefetch.** SCCA versión 30 (variante con la matriz de métricas en 0x128), comprimido con LZXPRESS Huffman propio (con coincidencias LZ77) y hash de ruta de Vista+ sobre `\DEVICE\HARDDISKVOLUME3`. `CMD.EXE-0BD30981.pf` coincide con el nombre real. Los programas que alojan servicios (svchost, dllhost, backgroundTaskHost) tienen un fichero por línea de comandos.
+- **Registro.** Colmenas regf limpias (secuencias iguales) con `.LOG1` y `.LOG2` vacíos. La raíz es la primera celda, como en Windows, y el nombre interno del base block es el real (`SYSTEM`, `\SystemRoot\System32\Config\SOFTWARE`, `\??\C:\Users\...\ntuser.dat`, `Amcache.hve`). Las colmenas son un subconjunto: las claves que mira un analista, no las cientos de miles de una colmena real.
+- **Hashes.** Los de los binarios legítimos son ficticios (no coincidirán con los de Microsoft en VirusTotal o NSRL). Los del implante salen de un buffer ficticio y son coherentes entre Sysmon y Amcache.
+- **Red.** Todas las IPs externas, también las de Microsoft, son de documentación (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`, `2001:db8::/32`).
+- **Validación hecha.** Los siete EVTX se leen completos con libevtx, el crate Rust `evtx` y python-evtx, sin registros recuperados ni corruptos. Las cinco colmenas, con libregf y regipy (incluidos sus plugins de ShimCache, USBSTOR, Run, UserAssist y Amcache). Los 76 Prefetch, con libscca. Los 83 LNK, con liblnk, libfwsi y LnkParse3. El historial de Edge pasa `integrity_check`. La salida es reproducible byte a byte.
+- **Pendiente.** Probar el ZIP con las EZ Tools y Hayabusa en una máquina Windows, que no se pueden descargar desde este contenedor.
