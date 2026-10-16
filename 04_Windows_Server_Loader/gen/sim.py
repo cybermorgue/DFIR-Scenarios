@@ -237,7 +237,8 @@ class Sim:
         p.guid = self.proc_guid(t, p.pid)
         lid = self.logon_id(ukey)
         p.logon = lid
-        p.lguid = self.logons[ukey][1] if ukey in self.logons else self.logon_guid(self.boot_t or t, lid)
+        b = self.boot_at(t)
+        p.lguid = self.logons[ukey][1] if ukey in self.logons else self.logon_guid(b["t"] if b else self.boot_t or t, lid)
         self.execs.setdefault(image.lower(), []).append((t, p))
         self.running.append(p)
         if key:
@@ -386,7 +387,7 @@ class Sim:
             ("ServiceType", S.STR, "servicio en modo usuario"), ("StartType", S.STR, start_type),
             ("AccountName", S.STR, account)], guid=GUIDS["Service Control Manager"],
             esn="Service Control Manager", qual=16384, kw=0x8080000000000000,
-            pid=self.procs["services"].pid if "services" in self.procs else None, user=sid)
+            pid=self.procs_at(t)["services"].pid if "services" in self.procs_at(t) else None, user=sid)
         self.sec(t, 4697, 12289, [
             ("SubjectUserSid", S.SID, sid), ("SubjectUserName", S.STR, HOST + "$" if ukey == "system" else uname),
             ("SubjectDomainName", S.STR, DOMAIN if ukey == "system" else dom),

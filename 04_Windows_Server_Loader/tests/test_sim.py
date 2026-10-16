@@ -93,3 +93,17 @@ def test_ventanas_de_registro_por_arranque():
     # en el hueco del reinicio no se registra nada
     q = sim.spawn(T(13, 8, 32, 0.0), CMD, "cmd.exe", mc1, "system")
     assert not [e for e in sim.ev["Sysmon"] if e.eid == 1 and f(e)["ProcessId"] == q.pid]
+
+
+def test_eventos_del_primer_arranque_usan_su_ventana():
+    sim = Sim()
+    sim.boot(T(1, 6, 0, 0.0))
+    first = sim.boots[0]
+    sim.shutdown(T(13, 8, 31, 0.0), "system", "Otro (planeado)")
+    sim.boot(T(13, 8, 33, 0.0))
+    t = T(4, 19, 19, 5.0)
+    p = sim.spawn(t, CMD, "cmd.exe", sim.procs_at(t)["mcservice"], "system")
+    assert p.lguid == sim.logon_guid(first["t"], 0x3E7)
+    sim.service_install(t, "OneSyncHost", "OneDrive Sync Host", r"C:\x\a.exe", "auto start", "LocalSystem")
+    e7045 = [e for e in sim.ev["System"] if e.eid == 7045][0]
+    assert e7045.pid == first["procs"]["services"].pid
